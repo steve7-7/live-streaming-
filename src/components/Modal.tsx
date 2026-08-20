@@ -23,7 +23,13 @@ export default function Modal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-[fade_.2s_ease]" onClick={onClose} />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Close dialog"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-slate-900/60 backdrop-blur-sm animate-[fade_.2s_ease]"
+      />
       <div
         className={`relative w-full ${wide ? "sm:max-w-2xl" : "sm:max-w-md"} rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl animate-[slideUp_.25s_ease] max-h-[90vh] overflow-hidden flex flex-col`}
       >
