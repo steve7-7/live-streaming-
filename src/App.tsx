@@ -9,8 +9,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import type { Stream } from "./types";
-import { me, streams } from "./data";
+import type { Stream, User } from "./types";
 import { Icon } from "./components/Icons";
 import Avatar from "./components/Avatar";
 import Discover from "./views/Discover";
@@ -24,6 +23,9 @@ import IncomingCall from "./components/IncomingCall";
 import PreJoin from "./components/PreJoin";
 import NotificationsPanel from "./components/NotificationsPanel";
 import { track } from "./lib/analytics";
+import { useAuth } from "./lib/auth";
+import { useStreams } from "./lib/hooks";
+import AuthScreen, { Splash } from "./views/Auth";
 import { cn } from "./utils/cn";
 
 type Tab = "discover" | "feed" | "messages" | "profile";
@@ -35,11 +37,11 @@ const TAB_ROUTES: Record<Tab, string> = {
   profile: "/profile",
 };
 
-function makeCallStream(title = "Group Call", category = "Call"): Stream {
+function makeCallStream(host: User, title = "Group Call", category = "Call"): Stream {
   return {
     id: "group",
     title,
-    host: me,
+    host,
     category,
     thumbnail: "",
     viewers: 5,
@@ -52,6 +54,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const inCall = location.pathname.startsWith("/live");
+  const { user, status: authStatus } = useAuth();
 
   const [dark, setDark] = useState<boolean>(() => {
     const saved = localStorage.getItem("theme");
@@ -112,6 +115,9 @@ export default function App() {
     else navigate(-1);
   };
 
+  if (authStatus === "loading") return <Splash />;
+  if (authStatus !== "authed" || !user) return <AuthScreen />;
+
   const navItems: { id: Tab; label: string; icon: ReactNode }[] = [
     { id: "discover", label: "Discover", icon: <Icon.Compass className="h-6 w-6" /> },
     { id: "feed", label: "Feed", icon: <Icon.Home className="h-6 w-6" /> },
@@ -154,7 +160,7 @@ export default function App() {
                 className="ml-1"
                 aria-label="Open your profile"
               >
-                <Avatar user={me} size="sm" showStatus />
+                <Avatar user={user} size="sm" showStatus />
               </button>
             </div>
           </div>
@@ -212,6 +218,7 @@ export default function App() {
             path="/live/:id"
             element={
               <LiveCall
+                me={user}
                 onLeave={leaveCall}
                 onOpenSettings={() => setSettingsOpen(true)}
                 onInvite={() => setInviteOpen(true)}
@@ -293,6 +300,7 @@ export default function App() {
 
 /** Resolves `/live/:id` into the matching call room. */
 function LiveCall({
+  me,
   onLeave,
   onOpenSettings,
   onInvite,
@@ -303,6 +311,7 @@ function LiveCall({
   setMicOn,
   toggleFacing,
 }: {
+  me: User;
   onLeave: () => void;
   onOpenSettings: () => void;
   onInvite: () => void;
@@ -315,20 +324,24 @@ function LiveCall({
 }) {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const { data: streamList } = useStreams();
 
   let mode: "watch" | "broadcast" | "group" = "watch";
   let stream: Stream | null = null;
   if (id === "broadcast") {
     mode = "broadcast";
     stream = makeCallStream(
+      me,
       searchParams.get("title") || "Your Broadcast",
       searchParams.get("category") || "Call"
     );
   } else if (id === "group") {
     mode = "group";
-    stream = makeCallStream();
+    stream = makeCallStream(me);
+  } else if (streamList) {
+    stream = streamList.find((s) => s.id === id) ?? null;
   } else {
-    stream = streams.find((s) => s.id === id) ?? null;
+    return <Splash />; // stream list still loading
   }
 
   if (!stream) return <Navigate to="/" replace />;

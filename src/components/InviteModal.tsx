@@ -2,13 +2,14 @@ import { useState } from "react";
 import Modal from "./Modal";
 import Avatar from "./Avatar";
 import { Icon } from "./Icons";
-import { users } from "../data";
+import { useUsers } from "../lib/hooks";
 import { cn } from "../utils/cn";
 
 export default function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [invited, setInvited] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [query, setQuery] = useState("");
+  const { data: users = [] } = useUsers();
   const link = "https://streamly.live/join/x7k9-live";
 
   const filtered = users.filter(

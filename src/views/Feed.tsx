@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { feedPosts, me } from "../data";
 import type { FeedPost, FeedComment } from "../types";
+import { useAddComment, useFeed, useLikeComment, useLikePost, useToggleFollow } from "../lib/hooks";
+import { useAuth } from "../lib/auth";
 import Avatar from "../components/Avatar";
 import { Icon } from "../components/Icons";
 import Modal from "../components/Modal";
@@ -12,25 +13,23 @@ function PostCard({
   post,
   commentCount,
   onOpenComments,
+  onToggleLike,
+  onToggleFollow,
 }: {
   post: FeedPost;
   commentCount: number;
   onOpenComments: (p: FeedPost) => void;
+  onToggleLike: (postId: string) => void;
+  onToggleFollow: (userId: string) => void;
 }) {
-  const [liked, setLiked] = useState(post.liked);
-  const [likes, setLikes] = useState(post.likes);
   const [burst, setBurst] = useState(false);
-  const [followed, setFollowed] = useState(false);
 
   const toggle = () => {
-    setLiked((l) => {
-      setLikes((n) => (l ? n - 1 : n + 1));
-      return !l;
-    });
-    if (!liked) {
+    if (!post.liked) {
       setBurst(true);
       setTimeout(() => setBurst(false), 600);
     }
+    onToggleLike(post.id);
   };
 
   return (
@@ -45,15 +44,15 @@ function PostCard({
           </p>
         </div>
         <button
-          onClick={() => setFollowed((f) => !f)}
+          onClick={() => onToggleFollow(post.user.id)}
           className={cn(
             "shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition",
-            followed
+            post.authorFollowed
               ? "bg-slate-100 dark:bg-slate-800 text-slate-500"
               : "bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-300"
           )}
         >
-          {followed ? "Following ✓" : "Follow"}
+          {post.authorFollowed ? "Following ✓" : "Follow"}
         </button>
       </div>
 
@@ -85,11 +84,11 @@ function PostCard({
             onClick={toggle}
             className={cn(
               "flex items-center gap-1.5 text-sm font-medium transition active:scale-90",
-              liked ? "text-red-500" : "text-slate-600 dark:text-slate-300"
+              post.liked ? "text-red-500" : "text-slate-600 dark:text-slate-300"
             )}
           >
-            <Icon.Heart className={cn("h-6 w-6", liked && "fill-red-500")} />
-            {likes.toLocaleString()}
+            <Icon.Heart className={cn("h-6 w-6", post.liked && "fill-red-500")} />
+            {post.likes.toLocaleString()}
           </button>
           <button
             onClick={() => onOpenComments(post)}
@@ -119,45 +118,53 @@ function PostCard({
 }
 
 export default function Feed({ onGoLive }: { onGoLive: () => void }) {
-  // Lift per-post comment state up so counts stay live
-  const [allComments, setAllComments] = useState<Record<string, FeedComment[]>>(
-    Object.fromEntries(feedPosts.map((p) => [p.id, p.comments]))
-  );
+  const { user: me } = useAuth();
+  const { data: posts = [], isLoading } = useFeed();
+  const likePost = useLikePost();
+  const addCommentMut = useAddComment();
+  const likeCommentMut = useLikeComment();
+  const toggleFollow = useToggleFollow();
+
+  // Locally-held comment overlays keyed by post id (seeded from the API posts on first use)
+  const [allComments, setAllComments] = useState<Record<string, FeedComment[]>>({});
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [text, setText] = useState("");
 
-  const activePost = feedPosts.find((p) => p.id === activePostId) ?? null;
-  const activeComments = activePostId ? (allComments[activePostId] ?? []) : [];
+  const commentsOf = (p: FeedPost) => allComments[p.id] ?? p.comments;
+  const activePost = posts.find((p) => p.id === activePostId) ?? null;
+  const activeComments = activePost ? commentsOf(activePost) : [];
 
   const openComments = (p: FeedPost) => setActivePostId(p.id);
 
   const addComment = () => {
-    if (!text.trim() || !activePostId) return;
-    const newComment: FeedComment = {
-      id: `c${Date.now()}`,
-      user: me,
-      text: text.trim(),
-      time: "now",
-      likes: 0,
-      liked: false,
-    };
-    setAllComments((prev) => ({
-      ...prev,
-      [activePostId]: [...(prev[activePostId] ?? []), newComment],
-    }));
-    setText("");
+    if (!text.trim() || !activePost) return;
+    const draft = text.trim();
+    addCommentMut.mutate(
+      { postId: activePost.id, text: draft },
+      {
+        onSuccess: (comment) => {
+          setAllComments((prev) => ({
+            ...prev,
+            [activePost.id]: [...(prev[activePost.id] ?? activePost.comments), comment],
+          }));
+          setText("");
+        },
+      }
+    );
   };
 
   const likeComment = (commentId: string) => {
-    if (!activePostId) return;
-    setAllComments((prev) => ({
-      ...prev,
-      [activePostId]: (prev[activePostId] ?? []).map((c) =>
-        c.id === commentId
-          ? { ...c, liked: !c.liked, likes: c.liked ? c.likes - 1 : c.likes + 1 }
-          : c
-      ),
-    }));
+    likeCommentMut.mutate(commentId, {
+      onSuccess: ({ liked, likes }) => {
+        setAllComments((prev) => {
+          const next = { ...prev };
+          for (const pid of Object.keys(next)) {
+            next[pid] = next[pid].map((c) => (c.id === commentId ? { ...c, liked, likes } : c));
+          }
+          return next;
+        });
+      },
+    });
   };
 
   return (
@@ -165,12 +172,31 @@ export default function Feed({ onGoLive }: { onGoLive: () => void }) {
       <h1 className="px-1 text-2xl font-bold text-slate-800 dark:text-white">Feed</h1>
       <StoriesBar onGoLive={onGoLive} />
 
-      {feedPosts.map((p) => (
+      {isLoading &&
+        [0, 1].map((i) => (
+          <div
+            key={i}
+            className="overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+          >
+            <div className="flex items-center gap-3 p-4">
+              <div className="shimmer h-11 w-11 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <div className="shimmer h-3 w-1/3 rounded" />
+                <div className="shimmer h-2 w-1/4 rounded" />
+              </div>
+            </div>
+            <div className="shimmer aspect-square" />
+          </div>
+        ))}
+
+      {posts.map((p) => (
         <PostCard
           key={p.id}
           post={p}
-          commentCount={allComments[p.id]?.length ?? 0}
+          commentCount={commentsOf(p).length}
           onOpenComments={openComments}
+          onToggleLike={(id) => likePost.mutate(id)}
+          onToggleFollow={(id) => toggleFollow.mutate(id)}
         />
       ))}
 
@@ -208,7 +234,7 @@ export default function Feed({ onGoLive }: { onGoLive: () => void }) {
 
         {/* Add comment */}
         <div className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2">
-          <Avatar user={me} size="xs" />
+          {me && <Avatar user={me} size="xs" />}
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -216,7 +242,11 @@ export default function Feed({ onGoLive }: { onGoLive: () => void }) {
             placeholder="Add a comment…"
             className="flex-1 bg-transparent text-sm outline-none text-slate-700 dark:text-white placeholder-slate-400"
           />
-          <button onClick={addComment} className="text-violet-500 hover:text-violet-600 transition">
+          <button
+            onClick={addComment}
+            disabled={addCommentMut.isPending}
+            className="text-violet-500 hover:text-violet-600 transition disabled:opacity-50"
+          >
             <Icon.Send className="h-4 w-4" />
           </button>
         </div>

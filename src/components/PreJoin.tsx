@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { me } from "../data";
 import Avatar from "./Avatar";
 import { Icon } from "./Icons";
+import { useAuth } from "../lib/auth";
 import { cn } from "../utils/cn";
 
 interface Props {
@@ -29,6 +29,7 @@ export default function PreJoin({
   onCancel,
   onStart,
 }: Props) {
+  const { user: me } = useAuth();
   const [title, setTitle] = useState(mode === "group" ? "Group Hangout" : "My Live Stream");
   const [category, setCategory] = useState("Talk");
   const [level, setLevel] = useState(6);
@@ -39,6 +40,8 @@ export default function PreJoin({
     const t = setInterval(() => setLevel(2 + Math.floor(Math.random() * 16)), 180);
     return () => clearInterval(t);
   }, [micOn]);
+
+  if (!me) return null; // gated by App's auth screen
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-slate-950 p-4 text-white">

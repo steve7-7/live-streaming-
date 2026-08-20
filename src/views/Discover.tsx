@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { streams } from "../data";
 import type { Stream } from "../types";
+import { useStreams } from "../lib/hooks";
 import Avatar from "../components/Avatar";
 import { Icon } from "../components/Icons";
 import { cn } from "../utils/cn";
@@ -17,16 +17,12 @@ export default function Discover({
   const [cat, setCat] = useState("All");
   const [q, setQ] = useState("");
 
-  const list = streams.filter(
-    (s) =>
-      (cat === "All" || s.category === cat) &&
-      (q === "" ||
-        s.title.toLowerCase().includes(q.toLowerCase()) ||
-        s.host.name.toLowerCase().includes(q.toLowerCase()))
-  );
+  // Server-side search/filter; the grid below renders exactly what the API returns
+  const { data: list = [], isLoading } = useStreams({ category: cat, q });
+  const { data: allStreams = [] } = useStreams();
 
-  // Most-watched live stream gets a "Featured" badge (derived from existing data)
-  const liveStreams = streams.filter((s) => s.live);
+  // Most-watched live stream gets a "Featured" badge (derived from live data)
+  const liveStreams = allStreams.filter((s) => s.live);
   const featuredId = liveStreams.length
     ? liveStreams.reduce((a, b) => (b.viewers > a.viewers ? b : a)).id
     : null;
@@ -88,7 +84,20 @@ export default function Discover({
 
       {/* Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {list.length === 0 && (
+        {isLoading &&
+          Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+            >
+              <div className="shimmer aspect-video" />
+              <div className="space-y-2 p-3">
+                <div className="shimmer h-3 w-3/4 rounded" />
+                <div className="shimmer h-2 w-1/2 rounded" />
+              </div>
+            </div>
+          ))}
+        {!isLoading && list.length === 0 && (
           <div className="col-span-full flex flex-col items-center gap-3 py-16 text-slate-400">
             <Icon.Search className="h-12 w-12 opacity-40" />
             <p className="font-medium text-slate-500 dark:text-slate-400">No streams found</p>

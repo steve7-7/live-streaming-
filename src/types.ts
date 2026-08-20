@@ -6,6 +6,7 @@ export interface User {
   color: string;
   status: "online" | "away" | "offline";
   followers: number;
+  bio?: string;
 }
 
 export interface Stream {
@@ -65,7 +66,21 @@ export interface FeedPost {
   media: string;
   isVideo: boolean;
   likes: number;
+  /** Whether the current viewer liked this post (server-computed). */
   liked: boolean;
+  /** Whether the current viewer follows the author (server-computed). */
+  authorFollowed?: boolean;
   comments: FeedComment[];
   time: string;
+}
+
+export type NotificationKind = "live" | "like" | "invite" | "comment" | "follow" | "gift";
+
+export interface AppNotification {
+  id: string;
+  actor: User;
+  kind: NotificationKind;
+  text: string;
+  time: string;
+  unread: boolean;
 }

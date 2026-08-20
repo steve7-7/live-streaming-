@@ -1,8 +1,14 @@
-import { me, users } from "../data";
 import Avatar from "./Avatar";
 import { Icon } from "./Icons";
+import { useAuth } from "../lib/auth";
+import { useUsers } from "../lib/hooks";
 
 export default function StoriesBar({ onGoLive }: { onGoLive: () => void }) {
+  const { user: me } = useAuth();
+  const { data: users = [] } = useUsers();
+
+  if (!me) return null;
+
   return (
     <div className="flex gap-3 overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
       <button onClick={onGoLive} className="flex w-16 shrink-0 flex-col items-center gap-1">

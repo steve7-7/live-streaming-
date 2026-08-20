@@ -6,3 +6,7 @@ test-results
 .env
 *.local
 .DS_Store
+server/data
+*.db
+*.db-wal
+*.db-shm

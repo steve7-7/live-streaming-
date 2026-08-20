@@ -1,6 +1,12 @@
-import { me, streams, users } from "../data";
+import { useState } from "react";
+import { useAuth } from "../lib/auth";
+import { useMeStats, useMyStreams, useUpdateMe, useUsers } from "../lib/hooks";
 import Avatar from "../components/Avatar";
 import { Icon } from "../components/Icons";
+import Modal from "../components/Modal";
+
+const fmtCount = (n: number) =>
+  n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K` : String(n);
 
 export default function Profile({
   dark,
@@ -11,12 +17,41 @@ export default function Profile({
   onToggleDark: () => void;
   onOpenSettings: () => void;
 }) {
-  const stats = [
-    { label: "Followers", value: "1.2K" },
-    { label: "Following", value: "348" },
-    { label: "Streams", value: "27" },
+  const { user: me, setUser, logout } = useAuth();
+  const { data: stats } = useMeStats();
+  const { data: users = [] } = useUsers();
+  const { data: myStreams = [] } = useMyStreams();
+  const updateMe = useUpdateMe();
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [bio, setBio] = useState("");
+
+  if (!me) return null;
+
+  const statItems = [
+    { label: "Followers", value: fmtCount(me.followers) },
+    { label: "Following", value: stats ? fmtCount(stats.following) : "—" },
+    { label: "Streams", value: stats ? fmtCount(stats.streams) : "—" },
   ];
-  const myStreams = streams.slice(0, 4);
+
+  const openEdit = () => {
+    setName(me.name);
+    setBio(me.bio ?? "");
+    setEditOpen(true);
+  };
+
+  const saveEdit = () => {
+    updateMe.mutate(
+      { name: name.trim(), bio: bio.trim() },
+      {
+        onSuccess: (user) => {
+          setUser(user);
+          setEditOpen(false);
+        },
+      }
+    );
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-28 pt-4 md:pb-8">
@@ -42,13 +77,11 @@ export default function Profile({
               </button>
             </div>
           </div>
-          <h1 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">Your Name</h1>
+          <h1 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">{me.name}</h1>
           <p className="text-slate-500">{me.handle}</p>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            🎥 Content creator · Live most evenings · Gaming, music & tech ✨
-          </p>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{me.bio}</p>
           <div className="mt-4 grid grid-cols-3 gap-2">
-            {stats.map((s) => (
+            {statItems.map((s) => (
               <div
                 key={s.label}
                 className="rounded-2xl bg-slate-50 dark:bg-slate-800 p-3 text-center"
@@ -58,8 +91,17 @@ export default function Profile({
               </div>
             ))}
           </div>
-          <button className="mt-4 w-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 py-2.5 font-semibold text-white transition hover:opacity-90">
+          <button
+            onClick={openEdit}
+            className="mt-4 w-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 py-2.5 font-semibold text-white transition hover:opacity-90"
+          >
             Edit Profile
+          </button>
+          <button
+            onClick={logout}
+            className="mt-2 w-full rounded-full border border-slate-200 dark:border-slate-700 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-red-500 dark:hover:bg-slate-800"
+          >
+            Log out
           </button>
         </div>
       </div>
@@ -87,12 +129,12 @@ export default function Profile({
           <Icon.Video className="h-5 w-5" /> Your streams
         </h2>
         <div className="grid grid-cols-2 gap-3">
-          {myStreams.map((s) => (
+          {myStreams.slice(0, 4).map((s) => (
             <div
               key={s.id}
               className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
             >
-              <div className="relative aspect-video">
+              <div className="shimmer relative aspect-video">
                 <img src={s.thumbnail} alt="" className="h-full w-full object-cover" />
                 <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
                   {s.viewers.toLocaleString()} views
@@ -105,6 +147,42 @@ export default function Profile({
           ))}
         </div>
       </div>
+
+      {/* Edit profile modal */}
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit profile">
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="edit-name" className="mb-1.5 block text-xs font-medium text-slate-500">
+              Display name
+            </label>
+            <input
+              id="edit-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-sm outline-none text-slate-700 dark:text-white focus:ring-2 focus:ring-violet-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="edit-bio" className="mb-1.5 block text-xs font-medium text-slate-500">
+              Bio
+            </label>
+            <textarea
+              id="edit-bio"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              rows={3}
+              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-sm outline-none text-slate-700 dark:text-white focus:ring-2 focus:ring-violet-500"
+            />
+          </div>
+          <button
+            onClick={saveEdit}
+            disabled={updateMe.isPending || name.trim().length < 2}
+            className="w-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 py-2.5 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+          >
+            {updateMe.isPending ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

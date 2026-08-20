@@ -1,19 +1,29 @@
 import { useEffect, useRef, useState } from "react";
-import { conversations, dmThreads } from "../data";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Conversation, DirectMessage } from "../types";
+import { useConversations, useSendMessage, useThread } from "../lib/hooks";
 import Avatar from "../components/Avatar";
 import { Icon } from "../components/Icons";
 import { cn } from "../utils/cn";
 
 export default function Messages({ onCall }: { onCall: (audioOnly: boolean) => void }) {
+  const qc = useQueryClient();
+  const { data: conversations = [], isLoading } = useConversations();
+  const sendMessage = useSendMessage();
+
   const [active, setActive] = useState<Conversation | null>(null);
-  const [threads, setThreads] = useState<Record<string, DirectMessage[]>>(dmThreads);
   const [text, setText] = useState("");
+  // Simulated peer replies stay local until Phase 3 brings realtime delivery.
+  const [replies, setReplies] = useState<Record<string, DirectMessage[]>>({});
   const end = useRef<HTMLDivElement>(null);
+
+  const activeId = active?.id ?? null;
+  const { data: serverMessages = [] } = useThread(activeId);
+  const thread = activeId ? [...serverMessages, ...(replies[activeId] ?? [])] : [];
 
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: "smooth" });
-  }, [threads, active]);
+  }, [thread.length, active]);
 
   // Clear the composer whenever the open thread changes
   const selectConversation = (c: Conversation | null) => {
@@ -22,24 +32,28 @@ export default function Messages({ onCall }: { onCall: (audioOnly: boolean) => v
   };
 
   const send = () => {
-    if (!active || !text.trim()) return;
-    const msg: DirectMessage = {
-      id: `m${Date.now()}`,
-      fromMe: true,
-      text: text.trim(),
-      time: "now",
-    };
-    setThreads((t) => ({ ...t, [active.id]: [...(t[active.id] || []), msg] }));
+    if (!activeId || !text.trim()) return;
+    const draft = text.trim();
+    const id = activeId;
     setText("");
-    setTimeout(() => {
-      const reply: DirectMessage = {
-        id: `r${Date.now()}`,
-        fromMe: false,
-        text: "Sounds great! 👍",
-        time: "now",
-      };
-      setThreads((t) => ({ ...t, [active.id]: [...(t[active.id] || []), reply] }));
-    }, 1400);
+    sendMessage.mutate(
+      { conversationId: id, text: draft },
+      {
+        onSuccess: (message) => {
+          // Reflect the sent message instantly (server refetch confirms it)
+          qc.setQueryData<DirectMessage[]>(["thread", id], (old) => [...(old ?? []), message]);
+          setTimeout(() => {
+            const reply: DirectMessage = {
+              id: `r${Date.now()}`,
+              fromMe: false,
+              text: "Sounds great! 👍",
+              time: "now",
+            };
+            setReplies((r) => ({ ...r, [id]: [...(r[id] ?? []), reply] }));
+          }, 1400);
+        },
+      }
+    );
   };
 
   return (
@@ -58,6 +72,16 @@ export default function Messages({ onCall }: { onCall: (audioOnly: boolean) => v
           </button>
         </div>
         <div className="space-y-1 px-2">
+          {isLoading &&
+            [0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3 rounded-2xl p-3">
+                <div className="shimmer h-11 w-11 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <div className="shimmer h-3 w-1/2 rounded" />
+                  <div className="shimmer h-2 w-3/4 rounded" />
+                </div>
+              </div>
+            ))}
           {conversations.map((c) => (
             <button
               key={c.id}
@@ -127,7 +151,7 @@ export default function Messages({ onCall }: { onCall: (audioOnly: boolean) => v
             </button>
           </div>
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
-            {(threads[active.id] || []).map((m) => (
+            {thread.map((m) => (
               <div key={m.id} className={cn("flex", m.fromMe ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
@@ -163,7 +187,11 @@ export default function Messages({ onCall }: { onCall: (audioOnly: boolean) => v
                 placeholder="Message..."
                 className="flex-1 bg-transparent text-sm outline-none text-slate-700 dark:text-white placeholder-slate-400"
               />
-              <button onClick={send} className="text-violet-500 hover:text-violet-600 transition">
+              <button
+                onClick={send}
+                disabled={sendMessage.isPending}
+                className="text-violet-500 hover:text-violet-600 transition disabled:opacity-50"
+              >
                 <Icon.Send className="h-5 w-5" />
               </button>
             </div>

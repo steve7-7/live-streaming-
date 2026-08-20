@@ -73,6 +73,8 @@ Make the codebase production-grade before adding services.
 
 ### Phase 1 — Backend, auth & persistence _(~2–3 weeks)_
 
+> **✅ CORE DONE — 2026-08-20.** Fastify API + SQLite (`node:sqlite` DAL — Prisma/Postgres swap is confined to `server/repo.ts`) + JWT auth (access/refresh, bcrypt) + TanStack Query client layer. All views read/write real data behind identical props; auth gate with demo account one-click; edit-profile + logout wired; 12 API integration tests. Deferred behind flags: Postgres/Prisma (sandbox CDN blocks engines), OAuth providers (needs external app creds), S3 media pipeline & Redis (needs infra), story model (uses users list), `/u/:handle` routes.
+
 Replace `data.ts` with a real API; keep every type.
 
 - **Stack:** NestJS or Fastify + Prisma + PostgreSQL; Redis for cache/presence; S3-compatible storage (avatars/thumbnails/post media). Alternative low-ops path: **Supabase** (auth + Postgres + storage + realtime) to move faster.

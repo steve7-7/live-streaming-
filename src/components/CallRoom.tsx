@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { Stream, ChatMessage, Reaction, User } from "../types";
-import { me, users, initialChat, chatBots, emojis } from "../data";
+import { users, initialChat, chatBots, emojis } from "../data";
 import { Icon } from "./Icons";
 import Avatar from "./Avatar";
 import FloatingReactions from "./FloatingReactions";
+import { useAuth } from "../lib/auth";
 import { cn } from "../utils/cn";
 
 interface Props {
@@ -35,6 +36,7 @@ function VideoTile({
   facing,
   pinnedId,
   handRaised,
+  meId,
 }: {
   user: User;
   big?: boolean;
@@ -43,8 +45,9 @@ function VideoTile({
   facing: "user" | "environment";
   pinnedId: string;
   handRaised: boolean;
+  meId: string;
 }) {
-  const isMe = user.id === "me";
+  const isMe = user.id === meId;
   const showCam = isMe ? camOn : true;
   return (
     <div
@@ -115,6 +118,10 @@ export default function CallRoom({
   toggleFacing,
   onInvite,
 }: Props) {
+  // App only renders CallRoom for signed-in users, so this is always set
+  const { user } = useAuth();
+  const me = user!;
+
   const [messages, setMessages] = useState<ChatMessage[]>(initialChat);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [input, setInput] = useState("");
@@ -215,6 +222,7 @@ export default function CallRoom({
                 facing={facing}
                 pinnedId={pinned.id}
                 handRaised={handRaised}
+                meId={me.id}
               />
               {participants.length > 1 && (
                 <div className="absolute bottom-4 right-4 flex gap-2">
@@ -234,6 +242,7 @@ export default function CallRoom({
                           facing={facing}
                           pinnedId={pinned.id}
                           handRaised={handRaised}
+                          meId={me.id}
                         />
                       </button>
                     ))}
@@ -264,6 +273,7 @@ export default function CallRoom({
                     facing={facing}
                     pinnedId={pinned.id}
                     handRaised={handRaised}
+                    meId={me.id}
                   />
                 </button>
               ))}
