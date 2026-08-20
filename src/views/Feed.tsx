@@ -40,7 +40,9 @@ function PostCard({
         <Avatar user={post.user} size="md" ring showStatus />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-slate-800 dark:text-white">{post.user.name}</p>
-          <p className="text-xs text-slate-400">{post.user.handle} · {post.time}</p>
+          <p className="text-xs text-slate-400">
+            {post.user.handle} · {post.time}
+          </p>
         </div>
         <button
           onClick={() => setFollowed((f) => !f)}
@@ -57,7 +59,7 @@ function PostCard({
 
       {/* Media */}
       <div
-        className="relative aspect-square bg-slate-100 dark:bg-slate-800 cursor-pointer"
+        className="shimmer relative aspect-square bg-slate-100 dark:bg-slate-800 cursor-pointer"
         onDoubleClick={toggle}
       >
         <img src={post.media} alt="" className="h-full w-full object-cover" />
@@ -176,7 +178,9 @@ export default function Feed({ onGoLive }: { onGoLive: () => void }) {
       <Modal open={!!activePost} onClose={() => setActivePostId(null)} title="Comments">
         <div className="space-y-4">
           {activeComments.length === 0 && (
-            <p className="py-6 text-center text-sm text-slate-400">No comments yet. Be the first!</p>
+            <p className="py-6 text-center text-sm text-slate-400">
+              No comments yet. Be the first!
+            </p>
           )}
           {activeComments.map((c) => (
             <div key={c.id} className="flex gap-3 animate-[fade_.2s_ease]">
@@ -191,7 +195,10 @@ export default function Feed({ onGoLive }: { onGoLive: () => void }) {
               </div>
               <button
                 onClick={() => likeComment(c.id)}
-                className={cn("shrink-0 transition active:scale-90", c.liked ? "text-red-500" : "text-slate-400")}
+                className={cn(
+                  "shrink-0 transition active:scale-90",
+                  c.liked ? "text-red-500" : "text-slate-400"
+                )}
               >
                 <Icon.Heart className={cn("h-4 w-4", c.liked && "fill-red-500")} />
               </button>

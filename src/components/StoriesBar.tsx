@@ -21,7 +21,9 @@ export default function StoriesBar({ onGoLive }: { onGoLive: () => void }) {
               <Avatar user={u} size="lg" />
             </div>
           </div>
-          <span className="w-full truncate text-xs text-slate-600 dark:text-slate-300">{u.name.split(" ")[0]}</span>
+          <span className="w-full truncate text-xs text-slate-600 dark:text-slate-300">
+            {u.name.split(" ")[0]}
+          </span>
         </button>
       ))}
     </div>
