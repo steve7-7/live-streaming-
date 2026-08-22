@@ -4,6 +4,7 @@ import jwt from "@fastify/jwt";
 import { compare, hash } from "bcryptjs";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
+import { AccessToken } from "livekit-server-sdk";
 import { db, row, rows, type Row } from "./db";
 import { relativeTime, userDto } from "./dto";
 
@@ -110,6 +111,55 @@ export async function buildApp() {
   };
 
   app.get("/health", () => ({ status: "ok" }));
+
+  app.post("/live/token", async (request, reply) => {
+    const input = z
+      .object({
+        room: z
+          .string()
+          .trim()
+          .min(1)
+          .max(128)
+          .regex(/^[a-zA-Z0-9_-]+$/),
+        role: z.enum(["watch", "publish"]),
+      })
+      .parse(request.body);
+    const userId = await optionalUser(request);
+    if (input.role === "publish" && !userId) {
+      return reply.code(401).send({ message: "Sign in to publish media" });
+    }
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    if (!apiKey || !apiSecret) {
+      return reply.code(503).send({ message: "Live media service is not configured" });
+    }
+
+    if (input.role === "publish" && !["broadcast", "group"].includes(input.room)) {
+      const owned = row(
+        "SELECT 1 ok FROM streams WHERE id = ? AND host_id = ?",
+        input.room,
+        userId
+      );
+      if (!owned) return reply.code(403).send({ message: "You cannot publish to this room" });
+    }
+
+    const identity = userId ?? `guest-${randomUUID()}`;
+    const token = new AccessToken(apiKey, apiSecret, {
+      identity,
+      name: userId
+        ? String(row("SELECT name FROM users WHERE id = ?", userId)?.name ?? "Creator")
+        : "Guest",
+      ttl: "2h",
+    });
+    token.addGrant({
+      roomJoin: true,
+      room: input.room,
+      canSubscribe: true,
+      canPublish: input.role === "publish",
+      canPublishData: input.role === "publish",
+    });
+    return { token: await token.toJwt() };
+  });
 
   app.post("/auth/register", async (request, reply) => {
     const input = registerBody.parse(request.body);

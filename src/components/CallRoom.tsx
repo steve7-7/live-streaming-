@@ -8,6 +8,7 @@ import { cn } from "../utils/cn";
 import { config } from "../config";
 import { useAuth } from "../auth/AuthContext";
 import { useDisplayMedia, useLocalMedia, type MediaStatus } from "../hooks/useLocalMedia";
+import { useLiveKitRoom } from "../hooks/useLiveKitRoom";
 
 interface Props {
   stream: Stream;
@@ -30,16 +31,26 @@ function createReaction(emoji: string): Reaction {
   return { id: `r${rid++}`, emoji, x: 5 + Math.random() * 80 };
 }
 
-function MediaVideo({ stream, mirrored }: { stream: MediaStream; mirrored?: boolean }) {
+function MediaVideo({
+  stream,
+  mirrored,
+  muted = true,
+}: {
+  stream: MediaStream;
+  mirrored?: boolean;
+  muted?: boolean;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream;
   }, [stream]);
   return (
+    // Live tracks do not expose a caption file; realtime transcription is planned in Phase 4.
+    // eslint-disable-next-line jsx-a11y/media-has-caption
     <video
       ref={ref}
       autoPlay
-      muted
+      muted={muted}
       playsInline
       className={cn("absolute inset-0 h-full w-full object-cover", mirrored && "-scale-x-100")}
     />
@@ -58,6 +69,7 @@ function VideoTile({
   localStream,
   localMediaStatus = "idle",
   screenSharing = false,
+  remoteStream,
 }: {
   user: User;
   big?: boolean;
@@ -70,6 +82,7 @@ function VideoTile({
   localStream?: MediaStream | null;
   localMediaStatus?: MediaStatus;
   screenSharing?: boolean;
+  remoteStream?: MediaStream;
 }) {
   const showCam = isLocal ? camOn || screenSharing : true;
   return (
@@ -80,7 +93,9 @@ function VideoTile({
       )}
     >
       {showCam ? (
-        isLocal && config.enableMedia ? (
+        remoteStream ? (
+          <MediaVideo stream={remoteStream} muted={false} />
+        ) : isLocal && config.enableMedia ? (
           localStream ? (
             <MediaVideo stream={localStream} mirrored={!screenSharing && facing === "user"} />
           ) : (
@@ -197,6 +212,12 @@ export default function CallRoom({
   );
   const activeLocalStream =
     screenShare && displayMedia.stream ? displayMedia.stream : localMedia.stream;
+  const liveRoom = useLiveKitRoom({
+    roomId: stream.id,
+    role: mode === "watch" ? "watch" : "publish",
+    localStream: mode === "watch" ? null : activeLocalStream,
+    screenSharing: screenShare && Boolean(displayMedia.stream),
+  });
 
   const spawnReaction = (emoji: string) => {
     const r = createReaction(emoji);
@@ -230,9 +251,22 @@ export default function CallRoom({
     setTimeout(() => setGiftToast(null), 2500);
   };
 
+  const connectedUsers: User[] = Object.values(liveRoom.remoteParticipants).map(
+    (participant, index) => ({
+      id: participant.id,
+      name: participant.name,
+      handle: `@${participant.id.slice(0, 12)}`,
+      avatar: "",
+      color: ["#06b6d4", "#ec4899", "#10b981", "#f59e0b"][index % 4],
+      status: "online",
+      followers: 0,
+    })
+  );
   const participants: User[] =
     mode === "group"
-      ? [localUser, users[0], users[1], users[3], users[6], users[7]]
+      ? liveRoom.enabled
+        ? [localUser, ...connectedUsers]
+        : [localUser, users[0], users[1], users[3], users[6], users[7]]
       : mode === "broadcast"
         ? [localUser]
         : [stream.host];
@@ -292,6 +326,7 @@ export default function CallRoom({
                 localStream={activeLocalStream}
                 localMediaStatus={localMedia.status}
                 screenSharing={screenShare && Boolean(displayMedia.stream)}
+                remoteStream={liveRoom.remoteStreams[pinned.id]}
               />
               {participants.length > 1 && (
                 <div className="absolute bottom-4 right-4 flex gap-2">
@@ -315,6 +350,7 @@ export default function CallRoom({
                           localStream={activeLocalStream}
                           localMediaStatus={localMedia.status}
                           screenSharing={screenShare && Boolean(displayMedia.stream)}
+                          remoteStream={liveRoom.remoteStreams[p.id]}
                         />
                       </button>
                     ))}
@@ -336,6 +372,7 @@ export default function CallRoom({
                     localStream={activeLocalStream}
                     localMediaStatus={localMedia.status}
                     screenSharing={screenShare && Boolean(displayMedia.stream)}
+                    remoteStream={liveRoom.remoteStreams[p.id]}
                   />
                 </button>
               ))}
@@ -358,6 +395,24 @@ export default function CallRoom({
             <span className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
               <Icon.User className="h-3 w-3" /> {viewers.toLocaleString()}
             </span>
+            {liveRoom.enabled && (
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[10px] font-semibold backdrop-blur",
+                  liveRoom.status === "connected"
+                    ? "bg-emerald-500/80 text-white"
+                    : liveRoom.status === "error"
+                      ? "bg-red-500/80 text-white"
+                      : "bg-black/50 text-slate-200"
+                )}
+              >
+                {liveRoom.status === "connected"
+                  ? "Media connected"
+                  : liveRoom.status === "error"
+                    ? "Media offline"
+                    : "Connecting media…"}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -540,9 +595,9 @@ export default function CallRoom({
           </div>
         )}
 
-        {displayMedia.error && (
-          <div className="absolute left-1/2 top-20 z-20 -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2 text-xs text-slate-200 shadow-xl">
-            {displayMedia.error}
+        {(displayMedia.error || liveRoom.error) && (
+          <div className="absolute left-1/2 top-20 z-20 max-w-sm -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2 text-center text-xs text-slate-200 shadow-xl">
+            {displayMedia.error || liveRoom.error}
           </div>
         )}
 

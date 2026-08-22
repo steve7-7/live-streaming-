@@ -124,6 +124,8 @@ export const api = {
     request<AuthResponse>("/auth/register", { method: "POST", body: input }, false),
   logout: (refreshToken: string | null) =>
     request<void>("/auth/logout", { method: "POST", body: { refreshToken } }, false),
+  liveToken: (room: string, role: "watch" | "publish") =>
+    request<{ token: string }>("/live/token", { method: "POST", body: { room, role } }),
   session: () => request<User>("/me"),
   updateProfile: (input: { name?: string; handle?: string; avatar?: string }) =>
     request<User>("/me", { method: "PATCH", body: input }),

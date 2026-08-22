@@ -88,7 +88,7 @@ Replace `data.ts` with a real API; keep every type.
 
 ### Phase 2 — Real live video _(~2–3 weeks)_
 
-> **🚧 IN PROGRESS — started 2026-08-22.** The pre-join lobby and broadcast/group call rooms now acquire real camera and microphone tracks behind `VITE_ENABLE_MEDIA`; local tiles render live mirrored video, controls operate actual tracks, front/rear switching reacquires the preferred camera, and the mic check uses Web Audio. Screen sharing now uses `getDisplayMedia`, replaces the local stage while active, reacts to the browser's stop-sharing control, reports cancellation/errors, and cleans up every track on leave. Requesting, unsupported, denied, retry, and device-error states are included, while fixture media remains available when the flag is disabled. LiveKit room tokens, publishing, and remote subscriptions are next.
+> **🚧 IN PROGRESS — started 2026-08-22.** The pre-join lobby and call rooms acquire real camera, microphone, and display tracks behind `VITE_ENABLE_MEDIA`, with track-backed controls, front/rear reacquisition, Web Audio metering, browser stop-sharing handling, errors, retries, and full cleanup. LiveKit transport is now wired when `VITE_LIVEKIT_URL` and server credentials are configured: the API issues two-hour room-scoped JWTs, allows anonymous subscribe-only viewers, requires authentication and stream ownership for publishers, publishes local camera/mic/screen tracks, subscribes remote tracks into participant tiles, and reports connection failures while retaining the local fallback. Unique persisted broadcast creation, a configured LiveKit deployment, and full multi-browser end-to-end validation are next.
 
 The core differentiator; replace simulated media behind the same components.
 

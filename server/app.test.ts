@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
@@ -44,9 +46,46 @@ describe("Streamly API", () => {
     expect(profile.statusCode).toBe(200);
   });
 
-  it("protects private endpoints", async () => {
+  it("protects private endpoints and publisher media tokens", async () => {
     const response = await app.inject({ method: "GET", url: "/me" });
     expect(response.statusCode).toBe(401);
+
+    const publishToken = await app.inject({
+      method: "POST",
+      url: "/live/token",
+      payload: { room: "broadcast", role: "publish" },
+    });
+    expect(publishToken.statusCode).toBe(401);
+  });
+
+  it("issues scoped viewer and publisher media tokens when LiveKit is configured", async () => {
+    const previousKey = process.env.LIVEKIT_API_KEY;
+    const previousSecret = process.env.LIVEKIT_API_SECRET;
+    process.env.LIVEKIT_API_KEY = "test-api-key";
+    process.env.LIVEKIT_API_SECRET = "test-secret-that-is-at-least-thirty-two-characters";
+    try {
+      const viewer = await app.inject({
+        method: "POST",
+        url: "/live/token",
+        payload: { room: "s1", role: "watch" },
+      });
+      expect(viewer.statusCode).toBe(200);
+      expect(viewer.json<{ token: string }>().token.split(".")).toHaveLength(3);
+
+      const publisher = await app.inject({
+        method: "POST",
+        url: "/live/token",
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { room: "broadcast", role: "publish" },
+      });
+      expect(publisher.statusCode).toBe(200);
+      expect(publisher.json<{ token: string }>().token.split(".")).toHaveLength(3);
+    } finally {
+      if (previousKey === undefined) delete process.env.LIVEKIT_API_KEY;
+      else process.env.LIVEKIT_API_KEY = previousKey;
+      if (previousSecret === undefined) delete process.env.LIVEKIT_API_SECRET;
+      else process.env.LIVEKIT_API_SECRET = previousSecret;
+    }
   });
 
   it("rotates refresh tokens and rejects reuse", async () => {

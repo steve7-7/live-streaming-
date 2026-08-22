@@ -2,7 +2,7 @@
 
 A live-streaming social app prototype: discover streams, watch/broadcast/group video rooms with chat & gifts, a photo/reels feed, stories, DMs, and notifications — all in React 19 + Vite + Tailwind CSS 4.
 
-> **Status:** Phase 0 is complete, Phase 1 persistence is functional, and Phase 2 media work is underway — see [ROADMAP.md](./ROADMAP.md). Public browsing and authenticated social actions use the Fastify/TanStack Query stack. With `VITE_ENABLE_MEDIA`, pre-join and local call tiles use real camera/microphone tracks and broadcasts support native screen sharing; fixture media remains available offline.
+> **Status:** Phase 0 is complete, Phase 1 persistence is functional, and Phase 2 media work is underway — see [ROADMAP.md](./ROADMAP.md). Public browsing and authenticated social actions use the Fastify/TanStack Query stack. Real local media and screen sharing work behind `VITE_ENABLE_MEDIA`; when LiveKit URLs and credentials are supplied, local tracks publish and remote tracks render in participant tiles. Fixture media remains available offline.
 
 ## Quickstart
 
@@ -50,9 +50,9 @@ Deep links are refresh-safe; leaving a room returns to the previous tab.
 
 ## Environment
 
-Copy `.env.example` → `.env`. Server values configure the SQLite database, API port, CORS origin, and separate access/refresh JWT secrets. Client values are read through `src/config.ts`. Set `VITE_ENABLE_API=true` for persistence and `VITE_ENABLE_MEDIA=true` for the real pre-join camera/microphone check. `VITE_API_URL=/api` uses Vite's proxy, so browser code never calls localhost directly. The client currently consumes:
+Copy `.env.example` → `.env`. Server values configure SQLite, CORS, auth secrets, and optional `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET`; client values come through `src/config.ts`. Set `VITE_ENABLE_API=true` for persistence, `VITE_ENABLE_MEDIA=true` for browser tracks, and `VITE_LIVEKIT_URL=wss://…` to connect an SFU. `VITE_API_URL=/api` uses Vite's proxy, so browser code never calls localhost directly. The client currently consumes:
 
-- `POST /auth/register`, `/auth/login`, `/auth/refresh`, and `/auth/logout`
+- `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, and `/live/token`
 - `GET /health`, `/me`, `/me/stats`, `/me/followers`, `/users/:handle`, `/streams`, `/streams/:id`, `/feed`, `/conversations`, and `/conversations/:id/messages`
 - `PATCH /me` for persisted name, handle, and avatar URL edits
 - `POST /posts/:id/comments`, `/posts/:id/like`, `/follows/:userId`, and `/conversations/:id/messages`
