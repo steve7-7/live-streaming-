@@ -107,7 +107,7 @@ The core differentiator; replace simulated media behind the same components.
 
 ### Phase 3 — Realtime social layer _(~2 weeks)_
 
-> **🚧 IN PROGRESS — started 2026-08-22.** Socket.IO now runs on the Fastify server and through Vite's WebSocket proxy behind `VITE_ENABLE_REALTIME`. Call rooms join isolated stream channels, receive database-backed chat history, persist and broadcast new guest/authenticated messages, synchronize reactions, and use socket membership for viewer presence. A simple per-socket chat rate limit is active; when realtime is enabled the old bot and random-viewer timer is disabled, while fixture behavior remains the fallback. Redis fan-out, gifts, notifications, typing, and incoming calls are next.
+> **🚧 IN PROGRESS — started 2026-08-22.** Socket.IO runs on Fastify through Vite's WebSocket proxy behind `VITE_ENABLE_REALTIME`. Isolated stream channels provide database-backed chat history, synchronized guest/authenticated messages, reactions, membership presence, and join/leave system messages. The existing gift picker now emits shared animated gift events, writes a ledger-ready `gift_events` record against a seeded gift catalog, and shows every viewer the sender toast and system message. Per-socket chat rate limiting is active; realtime disables the old bots/random viewer timer while fixture behavior remains the fallback. Redis fan-out, wallet debits, notifications, typing, and incoming calls are next.
 
 Kill the remaining timers.
 

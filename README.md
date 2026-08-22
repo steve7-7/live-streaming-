@@ -61,7 +61,7 @@ The HTTP API includes:
 - `POST /posts/:id/comments`, `/posts/:id/like`, `/follows/:userId`, and `/conversations/:id/messages`
 - `DELETE /posts/:id/like` and `/follows/:userId`
 
-Socket.IO exposes `room.join`, `chat.send`, and `reaction.send`, and emits chat history/messages, reactions, presence counts, and room errors on isolated `stream:{id}` channels.
+Socket.IO exposes `room.join`, `chat.send`, `reaction.send`, and `gift.send`; isolated `stream:{id}` channels emit persistent chat, reactions, gift animations, join/leave events, presence counts, and room errors. Gift events are recorded against the server's gift catalog for future wallet settlement.
 
 Access and refresh tokens are stored under the `streamly_*_token` local-storage keys. The client restores sessions at startup and, after a 401, performs one shared refresh rotation before retrying concurrent requests. Failed refreshes clear the session and return to sign-in. Requests also have configurable timeouts and typed errors.
 

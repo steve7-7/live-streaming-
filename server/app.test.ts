@@ -77,6 +77,16 @@ describe("Streamly API", () => {
           "s1"
         )?.text
       ).toBe("realtime integration");
+
+      const gift = new Promise<{ gift: { id: string } }>((resolve) => socket.once("gift", resolve));
+      socket.emit("gift.send", { streamId: "s1", giftId: "rose" });
+      await expect(gift).resolves.toMatchObject({ gift: { id: "rose" } });
+      expect(
+        row(
+          "SELECT gift_id FROM gift_events WHERE stream_id = ? ORDER BY created_at DESC LIMIT 1",
+          "s1"
+        )?.gift_id
+      ).toBe("rose");
     } finally {
       socket.disconnect();
     }

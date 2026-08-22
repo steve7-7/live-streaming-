@@ -14,6 +14,7 @@ const roomInput = z.object({
 });
 const chatInput = roomInput.extend({ text: z.string().trim().min(1).max(500) });
 const reactionInput = roomInput.extend({ emoji: z.string().min(1).max(16) });
+const giftInput = roomInput.extend({ giftId: z.string().min(1).max(40) });
 type JwtPayload = { sub: string; type: "access" | "refresh" };
 
 const messageDto = (record: Row) => ({
@@ -75,6 +76,27 @@ export function registerRealtime(app: FastifyInstance) {
     const guestId = `guest-${randomUUID()}`;
     const guestName = `Guest ${guestId.slice(-4)}`;
     const sentAt: number[] = [];
+    const socketUser = () => {
+      const userId = typeof socket.data.userId === "string" ? socket.data.userId : null;
+      if (!userId) {
+        return {
+          id: guestId,
+          name: guestName,
+          handle: "@guest",
+          avatar: "",
+          color: "#94a3b8",
+          status: "online" as const,
+          followers: 0,
+        };
+      }
+      return userDto(
+        row(
+          `SELECT u.*, (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) followers
+           FROM users u WHERE u.id = ?`,
+          userId
+        )!
+      );
+    };
 
     socket.on("room.join", (input: unknown) => {
       const parsed = roomInput.safeParse(input);
@@ -98,6 +120,13 @@ export function registerRealtime(app: FastifyInstance) {
         .reverse()
         .map(messageDto);
       socket.emit("chat.history", history);
+      socket.to(roomName).emit("room.system", {
+        id: randomUUID(),
+        user: socketUser(),
+        text: "joined the room",
+        time: "now",
+        system: true,
+      });
       emitPresence(streamId);
     });
 
@@ -134,11 +163,42 @@ export function registerRealtime(app: FastifyInstance) {
       });
     });
 
+    socket.on("gift.send", (input: unknown) => {
+      const parsed = giftInput.safeParse(input);
+      if (!parsed.success || !joined.has(parsed.data.streamId)) return;
+      const gift = row("SELECT * FROM gifts WHERE id = ?", parsed.data.giftId);
+      if (!gift) return socket.emit("room.error", "Gift not found");
+
+      const id = randomUUID();
+      const userId = typeof socket.data.userId === "string" ? socket.data.userId : null;
+      db.prepare(
+        "INSERT INTO gift_events (id, stream_id, sender_id, guest_name, gift_id) VALUES (?, ?, ?, ?, ?)"
+      ).run(id, parsed.data.streamId, userId, userId ? null : guestName, gift.id);
+      io.to(`stream:${parsed.data.streamId}`).emit("gift", {
+        id,
+        user: socketUser(),
+        gift: {
+          id: String(gift.id),
+          name: String(gift.name),
+          emoji: String(gift.emoji),
+          coins: Number(gift.coin_cost),
+        },
+        time: "now",
+      });
+    });
+
     socket.on("disconnecting", () => {
       joined.forEach((streamId) => {
         const roomName = `stream:${streamId}`;
         const current = io.sockets.adapter.rooms.get(roomName)?.size ?? 1;
         socket.to(roomName).emit("room.presence", Math.max(0, current - 1));
+        socket.to(roomName).emit("room.system", {
+          id: randomUUID(),
+          user: socketUser(),
+          text: "left the room",
+          time: "now",
+          system: true,
+        });
       });
     });
   });

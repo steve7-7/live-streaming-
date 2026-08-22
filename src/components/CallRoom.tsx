@@ -223,6 +223,7 @@ export default function CallRoom({
   const activeMessages = realtime.enabled ? realtime.messages : messages;
   const activeReactions = realtime.enabled ? realtime.reactions : reactions;
   const activeViewers = realtime.enabled ? realtime.viewers : viewers;
+  const activeGiftToast = realtime.enabled ? realtime.latestGift : giftToast;
 
   const spawnReaction = (emoji: string) => {
     if (realtime.enabled) {
@@ -235,16 +236,20 @@ export default function CallRoom({
   };
 
   const gifts = [
-    { e: "🌹", n: "Rose", c: 10 },
-    { e: "🎉", n: "Party", c: 50 },
-    { e: "💎", n: "Diamond", c: 100 },
-    { e: "👑", n: "Crown", c: 250 },
-    { e: "🚀", n: "Rocket", c: 500 },
-    { e: "🦄", n: "Unicorn", c: 1000 },
+    { id: "rose", e: "🌹", n: "Rose", c: 10 },
+    { id: "party", e: "🎉", n: "Party", c: 50 },
+    { id: "diamond", e: "💎", n: "Diamond", c: 100 },
+    { id: "crown", e: "👑", n: "Crown", c: 250 },
+    { id: "rocket", e: "🚀", n: "Rocket", c: 500 },
+    { id: "unicorn", e: "🦄", n: "Unicorn", c: 1000 },
   ];
 
-  const sendGift = (g: { e: string; n: string }) => {
+  const sendGift = (g: { id: string; e: string; n: string }) => {
     setShowGifts(false);
+    if (realtime.enabled) {
+      realtime.sendGift(g.id);
+      return;
+    }
     setGiftToast(`You sent a ${g.n} ${g.e}`);
     for (let i = 0; i < 5; i++) setTimeout(() => spawnReaction(g.e), i * 120);
     setMessages((m) => [
@@ -632,9 +637,9 @@ export default function CallRoom({
         )}
 
         {/* Gift toast */}
-        {giftToast && (
+        {activeGiftToast && (
           <div className="absolute left-1/2 top-20 z-20 -translate-x-1/2 animate-[slideUp_.3s_ease] rounded-full bg-gradient-to-r from-fuchsia-500 to-amber-400 px-5 py-2 text-sm font-semibold text-white shadow-xl">
-            {giftToast}
+            {activeGiftToast}
           </div>
         )}
 
