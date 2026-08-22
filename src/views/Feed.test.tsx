@@ -1,9 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "../test/render";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import Feed from "./Feed";
 import { feedPosts } from "../data";
 import type { FeedPost } from "../types";
+
+vi.mock("../auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "me" } }) }));
 
 const captionOf = (p: FeedPost) =>
   screen.getByText((_, el) => el?.tagName === "P" && (el.textContent ?? "").includes(p.caption));

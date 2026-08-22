@@ -1,6 +1,10 @@
-import { me, streams, users } from "../data";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import Avatar from "../components/Avatar";
+import EditProfileModal from "../components/EditProfileModal";
 import { Icon } from "../components/Icons";
+import { useFollowers, useProfileStats, useSession, useStreams } from "../hooks/useData";
+import { useAuth } from "../auth/AuthContext";
 
 export default function Profile({
   dark,
@@ -11,12 +15,21 @@ export default function Profile({
   onToggleDark: () => void;
   onOpenSettings: () => void;
 }) {
+  const { updateProfile } = useAuth();
+  const [editOpen, setEditOpen] = useState(false);
+  const { data: session } = useSession();
+  const { data: streams = [] } = useStreams();
+  const { data: followers = [] } = useFollowers();
+  const { data: profileStats } = useProfileStats();
+  if (!session) return <div className="shimmer min-h-96" aria-label="Loading profile" />;
+
   const stats = [
-    { label: "Followers", value: "1.2K" },
-    { label: "Following", value: "348" },
-    { label: "Streams", value: "27" },
+    { label: "Followers", value: (profileStats?.followers ?? session.followers).toLocaleString() },
+    { label: "Following", value: (profileStats?.following ?? 0).toLocaleString() },
+    { label: "Streams", value: (profileStats?.streams ?? 0).toLocaleString() },
   ];
-  const myStreams = streams.slice(0, 4);
+  const myStreams = streams.filter((stream) => stream.host.id === session.id).slice(0, 4);
+  const visibleStreams = myStreams.length ? myStreams : streams.slice(0, 4);
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-28 pt-4 md:pb-8">
@@ -25,7 +38,7 @@ export default function Profile({
         <div className="px-6 pb-6">
           <div className="-mt-12 flex items-end justify-between">
             <div className="rounded-full border-4 border-white dark:border-slate-900">
-              <Avatar user={me} size="xl" showStatus />
+              <Avatar user={session} size="xl" showStatus />
             </div>
             <div className="flex gap-2">
               <button
@@ -42,8 +55,8 @@ export default function Profile({
               </button>
             </div>
           </div>
-          <h1 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">Your Name</h1>
-          <p className="text-slate-500">{me.handle}</p>
+          <h1 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">{session.name}</h1>
+          <p className="text-slate-500">{session.handle}</p>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
             🎥 Content creator · Live most evenings · Gaming, music & tech ✨
           </p>
@@ -58,7 +71,10 @@ export default function Profile({
               </div>
             ))}
           </div>
-          <button className="mt-4 w-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 py-2.5 font-semibold text-white transition hover:opacity-90">
+          <button
+            onClick={() => setEditOpen(true)}
+            className="mt-4 w-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 py-2.5 font-semibold text-white transition hover:opacity-90"
+          >
             Edit Profile
           </button>
         </div>
@@ -70,13 +86,20 @@ export default function Profile({
           <Icon.Users className="h-5 w-5" /> Recent followers
         </h2>
         <div className="flex gap-3 overflow-x-auto pb-2">
-          {users.map((u) => (
-            <div key={u.id} className="flex w-20 shrink-0 flex-col items-center gap-1 text-center">
+          {followers.length === 0 && (
+            <p className="py-3 text-sm text-slate-400">New followers will appear here.</p>
+          )}
+          {followers.map((u) => (
+            <Link
+              key={u.id}
+              to={`/u/${u.handle.replace(/^@/, "")}`}
+              className="flex w-20 shrink-0 flex-col items-center gap-1 text-center"
+            >
               <Avatar user={u} size="lg" ring showStatus />
               <span className="truncate w-full text-xs text-slate-600 dark:text-slate-300">
                 {u.name.split(" ")[0]}
               </span>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
@@ -87,7 +110,7 @@ export default function Profile({
           <Icon.Video className="h-5 w-5" /> Your streams
         </h2>
         <div className="grid grid-cols-2 gap-3">
-          {myStreams.map((s) => (
+          {visibleStreams.map((s) => (
             <div
               key={s.id}
               className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
@@ -105,6 +128,17 @@ export default function Profile({
           ))}
         </div>
       </div>
+
+      {editOpen && (
+        <EditProfileModal
+          open
+          user={session}
+          onClose={() => setEditOpen(false)}
+          onSave={async (input) => {
+            await updateProfile(input);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -73,6 +73,8 @@ Make the codebase production-grade before adding services.
 
 ### Phase 1 — Backend, auth & persistence _(~2–3 weeks)_
 
+> **🚧 IN PROGRESS — started 2026-08-20.** The typed REST/TanStack Query client and Fastify service now provide versioned SQL migrations, local SQLite persistence, seeded development data, bcrypt credentials, short-lived JWT access tokens, rotating refresh tokens, CORS, validation, and the streams/feed/follows/comments/conversations/DM endpoints consumed by the UI. Discover is always the landing page; Discover, Feed, stream watching, and `/u/:handle` creator profiles are public, while personal pages and write actions redirect guests to `/login` and return them afterward. Startup session restoration, single-flight token refresh/retry, expiration handling, and sign-out are connected behind `VITE_ENABLE_API`. Profile edits, follower previews, statistics, follows, comments, and DMs persist. The disabled flag keeps fixture mode fully offline. PostgreSQL/managed-SQL deployment, signed media uploads, OAuth, and the remaining fixture consumers are next.
+
 Replace `data.ts` with a real API; keep every type.
 
 - **Stack:** NestJS or Fastify + Prisma + PostgreSQL; Redis for cache/presence; S3-compatible storage (avatars/thumbnails/post media). Alternative low-ops path: **Supabase** (auth + Postgres + storage + realtime) to move faster.
