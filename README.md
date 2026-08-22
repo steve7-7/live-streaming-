@@ -2,7 +2,7 @@
 
 A live-streaming social app prototype: discover streams, watch/broadcast/group video rooms with chat & gifts, a photo/reels feed, stories, DMs, and notifications — all in React 19 + Vite + Tailwind CSS 4.
 
-> **Status:** Phase 0 is complete, Phase 1 persistence is functional, and Phase 2 media work has started — see [ROADMAP.md](./ROADMAP.md). Public browsing and authenticated social actions use the Fastify/TanStack Query stack. The pre-join lobby uses real camera, microphone, and audio-level tracks behind `VITE_ENABLE_MEDIA`; fixture mode remains available for offline use.
+> **Status:** Phase 0 is complete, Phase 1 persistence is functional, and Phase 2 media work is underway — see [ROADMAP.md](./ROADMAP.md). Public browsing and authenticated social actions use the Fastify/TanStack Query stack. With `VITE_ENABLE_MEDIA`, pre-join and local call tiles use real camera/microphone tracks and broadcasts support native screen sharing; fixture media remains available offline.
 
 ## Quickstart
 

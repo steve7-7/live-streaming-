@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useLocalMedia } from "./useLocalMedia";
+import { useDisplayMedia, useLocalMedia } from "./useLocalMedia";
 
 const originalMediaDevices = navigator.mediaDevices;
 
@@ -43,6 +43,32 @@ describe("useLocalMedia", () => {
     unmount();
     expect(videoTrack.stop).toHaveBeenCalled();
     expect(audioTrack.stop).toHaveBeenCalled();
+  });
+
+  it("acquires and releases a display track", async () => {
+    let ended: (() => void) | undefined;
+    const displayTrack = {
+      stop: vi.fn(),
+      addEventListener: vi.fn((_event: string, callback: () => void) => {
+        ended = callback;
+      }),
+    };
+    const displayStream = {
+      getTracks: () => [displayTrack],
+      getVideoTracks: () => [displayTrack],
+    } as unknown as MediaStream;
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getDisplayMedia: vi.fn().mockResolvedValue(displayStream) },
+    });
+    const onEnded = vi.fn();
+
+    const { result, unmount } = renderHook(() => useDisplayMedia(true, onEnded));
+    await waitFor(() => expect(result.current.stream).toBe(displayStream));
+    act(() => ended?.());
+    expect(onEnded).toHaveBeenCalled();
+    unmount();
+    expect(displayTrack.stop).toHaveBeenCalled();
   });
 
   it("reports denied permission and can retry", async () => {

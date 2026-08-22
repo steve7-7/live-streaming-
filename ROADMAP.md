@@ -88,7 +88,7 @@ Replace `data.ts` with a real API; keep every type.
 
 ### Phase 2 — Real live video _(~2–3 weeks)_
 
-> **🚧 IN PROGRESS — started 2026-08-22.** The pre-join lobby now acquires real camera and microphone tracks behind `VITE_ENABLE_MEDIA`, renders a mirrored live preview, applies mic/camera toggles to tracks, reacquires the preferred front/rear camera, measures the real microphone level with Web Audio, stops every track on cleanup, and provides requesting, unsupported, denied, retry, and device-error states. The fixture preview remains available when the flag is disabled. LiveKit room tokens, publishing, and remote subscription are next.
+> **🚧 IN PROGRESS — started 2026-08-22.** The pre-join lobby and broadcast/group call rooms now acquire real camera and microphone tracks behind `VITE_ENABLE_MEDIA`; local tiles render live mirrored video, controls operate actual tracks, front/rear switching reacquires the preferred camera, and the mic check uses Web Audio. Screen sharing now uses `getDisplayMedia`, replaces the local stage while active, reacts to the browser's stop-sharing control, reports cancellation/errors, and cleans up every track on leave. Requesting, unsupported, denied, retry, and device-error states are included, while fixture media remains available when the flag is disabled. LiveKit room tokens, publishing, and remote subscriptions are next.
 
 The core differentiator; replace simulated media behind the same components.
 

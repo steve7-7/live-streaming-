@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type MediaStatus = "idle" | "requesting" | "ready" | "denied" | "unavailable" | "error";
 
@@ -123,4 +123,59 @@ export function useAudioLevel(stream: MediaStream | null, enabled: boolean, bars
   }, [bars, enabled, stream]);
 
   return enabled && stream?.getAudioTracks()[0] ? level : 0;
+}
+
+export function useDisplayMedia(enabled: boolean, onEnded: () => void) {
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [error, setError] = useState("");
+  const onEndedRef = useRef(onEnded);
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      Promise.resolve().then(() => {
+        setError("Screen sharing is not supported in this browser.");
+        onEndedRef.current();
+      });
+      return;
+    }
+
+    let cancelled = false;
+    let acquired: MediaStream | null = null;
+    navigator.mediaDevices
+      .getDisplayMedia({ video: true, audio: true })
+      .then((nextStream) => {
+        acquired = nextStream;
+        if (cancelled) {
+          nextStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        nextStream.getVideoTracks()[0]?.addEventListener("ended", () => onEndedRef.current(), {
+          once: true,
+        });
+        setStream(nextStream);
+        setError("");
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        const displayError = cause as DOMException;
+        setError(
+          displayError.name === "NotAllowedError"
+            ? "Screen sharing was cancelled."
+            : displayError.message || "The screen could not be shared."
+        );
+        onEndedRef.current();
+      });
+
+    return () => {
+      cancelled = true;
+      acquired?.getTracks().forEach((track) => track.stop());
+      setStream((current) => (current === acquired ? null : current));
+    };
+  }, [enabled]);
+
+  return { stream, error };
 }
