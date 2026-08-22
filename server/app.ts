@@ -7,6 +7,7 @@ import { z } from "zod";
 import { AccessToken } from "livekit-server-sdk";
 import { db, row, rows, type Row } from "./db";
 import { relativeTime, userDto } from "./dto";
+import { registerRealtime } from "./realtime";
 
 const credentials = z.object({ email: z.string().email(), password: z.string().min(8).max(128) });
 const registerBody = credentials.extend({
@@ -51,6 +52,7 @@ export async function buildApp() {
     credentials: true,
   });
   await app.register(jwt, { secret: accessSecret });
+  registerRealtime(app);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {

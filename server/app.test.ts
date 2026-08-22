@@ -2,18 +2,23 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
+import type { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
+import { io as socketClient, type Socket } from "socket.io-client";
 import { buildApp } from "./app";
-import { db } from "./db";
+import { db, row } from "./db";
 import { seedDatabase } from "./seed";
 
 let app: FastifyInstance;
 let accessToken: string;
+let socketUrl: string;
 
 beforeAll(async () => {
   await seedDatabase();
   app = await buildApp();
-  await app.ready();
+  await app.listen({ host: "127.0.0.1", port: 0 });
+  const address = app.server.address() as AddressInfo;
+  socketUrl = `http://127.0.0.1:${address.port}`;
   const response = await app.inject({
     method: "POST",
     url: "/auth/login",
@@ -44,6 +49,37 @@ describe("Streamly API", () => {
 
     const profile = await app.inject({ method: "GET", url: "/users/arianova" });
     expect(profile.statusCode).toBe(200);
+  });
+
+  it("broadcasts and persists realtime room chat for guests", async () => {
+    const socket: Socket = socketClient(socketUrl, {
+      path: "/socket.io",
+      transports: ["websocket"],
+      forceNew: true,
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        socket.once("connect", resolve);
+        socket.once("connect_error", reject);
+      });
+      const history = new Promise<unknown[]>((resolve) => socket.once("chat.history", resolve));
+      socket.emit("room.join", { streamId: "s1" });
+      await expect(history).resolves.toEqual(expect.any(Array));
+
+      const incoming = new Promise<{ text: string }>((resolve) =>
+        socket.once("chat.message", resolve)
+      );
+      socket.emit("chat.send", { streamId: "s1", text: "realtime integration" });
+      await expect(incoming).resolves.toMatchObject({ text: "realtime integration" });
+      expect(
+        row(
+          "SELECT text FROM live_messages WHERE stream_id = ? ORDER BY created_at DESC LIMIT 1",
+          "s1"
+        )?.text
+      ).toBe("realtime integration");
+    } finally {
+      socket.disconnect();
+    }
   });
 
   it("protects private endpoints and publisher media tokens", async () => {

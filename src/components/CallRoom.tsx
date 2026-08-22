@@ -9,6 +9,7 @@ import { config } from "../config";
 import { useAuth } from "../auth/AuthContext";
 import { useDisplayMedia, useLocalMedia, type MediaStatus } from "../hooks/useLocalMedia";
 import { useLiveKitRoom } from "../hooks/useLiveKitRoom";
+import { useRealtimeRoom } from "../hooks/useRealtimeRoom";
 
 interface Props {
   stream: Stream;
@@ -218,8 +219,16 @@ export default function CallRoom({
     localStream: mode === "watch" ? null : activeLocalStream,
     screenSharing: screenShare && Boolean(displayMedia.stream),
   });
+  const realtime = useRealtimeRoom(stream.id);
+  const activeMessages = realtime.enabled ? realtime.messages : messages;
+  const activeReactions = realtime.enabled ? realtime.reactions : reactions;
+  const activeViewers = realtime.enabled ? realtime.viewers : viewers;
 
   const spawnReaction = (emoji: string) => {
+    if (realtime.enabled) {
+      realtime.sendReaction(emoji);
+      return;
+    }
     const r = createReaction(emoji);
     setReactions((prev) => [...prev, r]);
     setTimeout(() => setReactions((prev) => prev.filter((x) => x.id !== r.id)), 3000);
@@ -277,6 +286,7 @@ export default function CallRoom({
   }, []);
 
   useEffect(() => {
+    if (realtime.enabled) return;
     const t = setInterval(() => {
       setViewers((v) => Math.max(1, v + Math.floor(Math.random() * 21) - 8));
       if (Math.random() > 0.35) {
@@ -284,21 +294,31 @@ export default function CallRoom({
         const text = chatBots[Math.floor(Math.random() * chatBots.length)];
         setMessages((m) => [...m.slice(-40), { id: `b${Date.now()}`, user: u, text, time: "now" }]);
       }
-      if (Math.random() > 0.5) spawnReaction(emojis[Math.floor(Math.random() * emojis.length)]);
+      if (Math.random() > 0.5) {
+        const reaction = createReaction(emojis[Math.floor(Math.random() * emojis.length)]);
+        setReactions((current) => [...current, reaction]);
+        setTimeout(
+          () => setReactions((current) => current.filter((item) => item.id !== reaction.id)),
+          3000
+        );
+      }
     }, 2600);
     return () => clearInterval(t);
-  }, []);
+  }, [realtime.enabled]);
 
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [activeMessages]);
 
   const send = () => {
     if (!input.trim()) return;
-    setMessages((m) => [
-      ...m,
-      { id: `me${Date.now()}`, user: localUser, text: input.trim(), time: "now" },
-    ]);
+    if (realtime.enabled) realtime.sendMessage(input.trim());
+    else {
+      setMessages((current) => [
+        ...current,
+        { id: `me${Date.now()}`, user: localUser, text: input.trim(), time: "now" },
+      ]);
+    }
     setInput("");
   };
 
@@ -378,7 +398,7 @@ export default function CallRoom({
               ))}
             </div>
           )}
-          <FloatingReactions reactions={reactions} />
+          <FloatingReactions reactions={activeReactions} />
         </div>
 
         {/* Top bar */}
@@ -393,8 +413,18 @@ export default function CallRoom({
               {fmt(elapsed)}
             </span>
             <span className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
-              <Icon.User className="h-3 w-3" /> {viewers.toLocaleString()}
+              <Icon.User className="h-3 w-3" /> {activeViewers.toLocaleString()}
             </span>
+            {realtime.enabled && (
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[10px] font-semibold backdrop-blur",
+                  realtime.connected ? "bg-violet-500/80 text-white" : "bg-red-500/80 text-white"
+                )}
+              >
+                {realtime.connected ? "Chat live" : "Chat offline"}
+              </span>
+            )}
             {liveRoom.enabled && (
               <span
                 className={cn(
@@ -595,9 +625,9 @@ export default function CallRoom({
           </div>
         )}
 
-        {(displayMedia.error || liveRoom.error) && (
+        {(displayMedia.error || liveRoom.error || realtime.error) && (
           <div className="absolute left-1/2 top-20 z-20 max-w-sm -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2 text-center text-xs text-slate-200 shadow-xl">
-            {displayMedia.error || liveRoom.error}
+            {displayMedia.error || liveRoom.error || realtime.error}
           </div>
         )}
 
@@ -634,10 +664,10 @@ export default function CallRoom({
           <h3 className="flex items-center gap-2 font-semibold text-white">
             <Icon.Chat className="h-4 w-4" /> Live Chat
           </h3>
-          <span className="text-xs text-slate-400">{viewers.toLocaleString()} watching</span>
+          <span className="text-xs text-slate-400">{activeViewers.toLocaleString()} watching</span>
         </div>
         <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
-          {messages.map((m) =>
+          {activeMessages.map((m) =>
             m.system ? (
               <div
                 key={m.id}

@@ -10,8 +10,9 @@ export const config = {
   enableApi: env("VITE_ENABLE_API") === "true",
   /** Enable real browser camera/microphone tracks for Phase 2 media flows. */
   enableMedia: env("VITE_ENABLE_MEDIA") === "true",
-  /** Realtime gateway URL — wired in Phase 3 (WebSocket). */
-  wsUrl: env("VITE_WS_URL", "ws://localhost:4000"),
+  /** Socket.IO origin; blank uses the current origin and Vite's WebSocket proxy. */
+  wsUrl: env("VITE_WS_URL"),
+  enableRealtime: env("VITE_ENABLE_REALTIME") === "true",
   /** LiveKit SFU URL — wired in Phase 2 (real media). */
   livekitUrl: env("VITE_LIVEKIT_URL"),
   /** Sentry DSN — error reporting activates only when set. */

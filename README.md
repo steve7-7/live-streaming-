@@ -2,7 +2,7 @@
 
 A live-streaming social app prototype: discover streams, watch/broadcast/group video rooms with chat & gifts, a photo/reels feed, stories, DMs, and notifications — all in React 19 + Vite + Tailwind CSS 4.
 
-> **Status:** Phase 0 is complete, Phase 1 persistence is functional, and Phase 2 media work is underway — see [ROADMAP.md](./ROADMAP.md). Public browsing and authenticated social actions use the Fastify/TanStack Query stack. Real local media and screen sharing work behind `VITE_ENABLE_MEDIA`; when LiveKit URLs and credentials are supplied, local tracks publish and remote tracks render in participant tiles. Fixture media remains available offline.
+> **Status:** Foundations and persistence are functional; media and realtime work are underway — see [ROADMAP.md](./ROADMAP.md). Public browsing and authenticated social actions use Fastify/TanStack Query. Browser tracks can publish through LiveKit, while Socket.IO now synchronizes persisted room chat, reactions, and viewer presence. Every service layer remains feature-flagged with fixture fallbacks.
 
 ## Quickstart
 
@@ -50,7 +50,9 @@ Deep links are refresh-safe; leaving a room returns to the previous tab.
 
 ## Environment
 
-Copy `.env.example` → `.env`. Server values configure SQLite, CORS, auth secrets, and optional `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET`; client values come through `src/config.ts`. Set `VITE_ENABLE_API=true` for persistence, `VITE_ENABLE_MEDIA=true` for browser tracks, and `VITE_LIVEKIT_URL=wss://…` to connect an SFU. `VITE_API_URL=/api` uses Vite's proxy, so browser code never calls localhost directly. The client currently consumes:
+Copy `.env.example` → `.env`. Server values configure SQLite, CORS, auth secrets, and optional LiveKit credentials; client values come through `src/config.ts`. Enable persistence with `VITE_ENABLE_API`, browser tracks with `VITE_ENABLE_MEDIA`, realtime rooms with `VITE_ENABLE_REALTIME`, and set `VITE_LIVEKIT_URL=wss://…` to connect an SFU. Blank realtime origin uses the same host through Vite's WebSocket proxy, so browser code never calls localhost directly.
+
+The HTTP API includes:
 
 - `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, and `/live/token`
 - `GET /health`, `/me`, `/me/stats`, `/me/followers`, `/users/:handle`, `/streams`, `/streams/:id`, `/feed`, `/conversations`, and `/conversations/:id/messages`
@@ -58,6 +60,8 @@ Copy `.env.example` → `.env`. Server values configure SQLite, CORS, auth secre
 - `POST /streams` creates a unique live broadcast; `PATCH /streams/:id/end` marks it replayable
 - `POST /posts/:id/comments`, `/posts/:id/like`, `/follows/:userId`, and `/conversations/:id/messages`
 - `DELETE /posts/:id/like` and `/follows/:userId`
+
+Socket.IO exposes `room.join`, `chat.send`, and `reaction.send`, and emits chat history/messages, reactions, presence counts, and room errors on isolated `stream:{id}` channels.
 
 Access and refresh tokens are stored under the `streamly_*_token` local-storage keys. The client restores sessions at startup and, after a 401, performs one shared refresh rotation before retrying concurrent requests. Failed refreshes clear the session and return to sign-in. Requests also have configurable timeouts and typed errors.
 
