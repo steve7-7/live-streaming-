@@ -1,28 +1,38 @@
 import { useState } from "react";
-import { feedPosts, me } from "../data";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { me } from "../data";
 import type { FeedPost, FeedComment } from "../types";
 import Avatar from "../components/Avatar";
 import { Icon } from "../components/Icons";
 import Modal from "../components/Modal";
 import StoriesBar from "../components/StoriesBar";
 import { cn } from "../utils/cn";
+import { useFeed, useSession } from "../hooks/useData";
+import { useAddComment, useSetFollow, useSetPostLike } from "../hooks/useSocialMutations";
 
 // Comment counts are lifted to Feed so they stay in sync after adding new ones
 function PostCard({
   post,
   commentCount,
   onOpenComments,
+  onRequireAuth,
 }: {
   post: FeedPost;
   commentCount: number;
   onOpenComments: (p: FeedPost) => void;
+  onRequireAuth: () => boolean;
 }) {
   const [liked, setLiked] = useState(post.liked);
   const [likes, setLikes] = useState(post.likes);
   const [burst, setBurst] = useState(false);
   const [followed, setFollowed] = useState(false);
+  const setPostLike = useSetPostLike();
+  const setFollow = useSetFollow();
 
   const toggle = () => {
+    if (!onRequireAuth()) return;
+    setPostLike.mutate({ postId: post.id, liked: !liked });
     setLiked((l) => {
       setLikes((n) => (l ? n - 1 : n + 1));
       return !l;
@@ -39,13 +49,22 @@ function PostCard({
       <div className="flex items-center gap-3 p-4">
         <Avatar user={post.user} size="md" ring showStatus />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-800 dark:text-white">{post.user.name}</p>
+          <Link
+            to={`/u/${post.user.handle.replace(/^@/, "")}`}
+            className="text-sm font-semibold text-slate-800 hover:text-violet-500 dark:text-white"
+          >
+            {post.user.name}
+          </Link>
           <p className="text-xs text-slate-400">
             {post.user.handle} · {post.time}
           </p>
         </div>
         <button
-          onClick={() => setFollowed((f) => !f)}
+          onClick={() => {
+            if (!onRequireAuth()) return;
+            setFollow.mutate({ userId: post.user.id, following: !followed });
+            setFollowed((f) => !f);
+          }}
           className={cn(
             "shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition",
             followed
@@ -119,40 +138,52 @@ function PostCard({
 }
 
 export default function Feed({ onGoLive }: { onGoLive: () => void }) {
+  const navigate = useNavigate();
+  const { user: signedInUser } = useAuth();
+  const requireAuth = () => {
+    if (signedInUser) return true;
+    navigate("/login?next=/feed");
+    return false;
+  };
+  const { data: posts = [], isPending, isError, refetch } = useFeed();
+  const { data: currentUser = me } = useSession();
   // Lift per-post comment state up so counts stay live
-  const [allComments, setAllComments] = useState<Record<string, FeedComment[]>>(
-    Object.fromEntries(feedPosts.map((p) => [p.id, p.comments]))
-  );
+  const [allComments, setAllComments] = useState<Record<string, FeedComment[]>>({});
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [text, setText] = useState("");
+  const addCommentMutation = useAddComment();
 
-  const activePost = feedPosts.find((p) => p.id === activePostId) ?? null;
-  const activeComments = activePostId ? (allComments[activePostId] ?? []) : [];
+  const activePost = posts.find((p) => p.id === activePostId) ?? null;
+  const activeComments = activePostId
+    ? (allComments[activePostId] ?? activePost?.comments ?? [])
+    : [];
 
   const openComments = (p: FeedPost) => setActivePostId(p.id);
 
   const addComment = () => {
-    if (!text.trim() || !activePostId) return;
+    if (!text.trim() || !activePostId || !requireAuth()) return;
+    const commentText = text.trim();
+    addCommentMutation.mutate({ postId: activePostId, text: commentText });
     const newComment: FeedComment = {
       id: `c${Date.now()}`,
-      user: me,
-      text: text.trim(),
+      user: currentUser,
+      text: commentText,
       time: "now",
       likes: 0,
       liked: false,
     };
     setAllComments((prev) => ({
       ...prev,
-      [activePostId]: [...(prev[activePostId] ?? []), newComment],
+      [activePostId]: [...(prev[activePostId] ?? activePost?.comments ?? []), newComment],
     }));
     setText("");
   };
 
   const likeComment = (commentId: string) => {
-    if (!activePostId) return;
+    if (!activePostId || !requireAuth()) return;
     setAllComments((prev) => ({
       ...prev,
-      [activePostId]: (prev[activePostId] ?? []).map((c) =>
+      [activePostId]: (prev[activePostId] ?? activePost?.comments ?? []).map((c) =>
         c.id === commentId
           ? { ...c, liked: !c.liked, likes: c.liked ? c.likes - 1 : c.likes + 1 }
           : c
@@ -165,12 +196,28 @@ export default function Feed({ onGoLive }: { onGoLive: () => void }) {
       <h1 className="px-1 text-2xl font-bold text-slate-800 dark:text-white">Feed</h1>
       <StoriesBar onGoLive={onGoLive} />
 
-      {feedPosts.map((p) => (
+      {isPending &&
+        Array.from({ length: 2 }, (_, index) => (
+          <div key={index} className="shimmer aspect-[3/4] rounded-3xl" aria-hidden="true" />
+        ))}
+      {isError && (
+        <div className="rounded-3xl border border-slate-200 p-8 text-center dark:border-slate-800">
+          <p className="text-sm text-slate-500">Your feed could not be loaded.</p>
+          <button
+            onClick={() => void refetch()}
+            className="mt-3 rounded-full bg-violet-500 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+      {posts.map((p) => (
         <PostCard
           key={p.id}
           post={p}
-          commentCount={allComments[p.id]?.length ?? 0}
+          commentCount={(allComments[p.id] ?? p.comments).length}
           onOpenComments={openComments}
+          onRequireAuth={requireAuth}
         />
       ))}
 
@@ -208,7 +255,7 @@ export default function Feed({ onGoLive }: { onGoLive: () => void }) {
 
         {/* Add comment */}
         <div className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2">
-          <Avatar user={me} size="xs" />
+          <Avatar user={currentUser} size="xs" />
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}

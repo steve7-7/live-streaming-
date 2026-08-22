@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { conversations, dmThreads } from "../data";
 import type { Conversation, DirectMessage } from "../types";
 import Avatar from "../components/Avatar";
 import { Icon } from "../components/Icons";
 import { cn } from "../utils/cn";
+import { useConversations, useMessages } from "../hooks/useData";
+import { useSendMessage } from "../hooks/useSocialMutations";
+import { config } from "../config";
 
 export default function Messages({ onCall }: { onCall: (audioOnly: boolean) => void }) {
+  const { data: conversations = [] } = useConversations();
   const [active, setActive] = useState<Conversation | null>(null);
-  const [threads, setThreads] = useState<Record<string, DirectMessage[]>>(dmThreads);
+  const { data: activeMessages } = useMessages(active?.id);
+  const sendMessage = useSendMessage();
+  const [threads, setThreads] = useState<Record<string, DirectMessage[]>>({});
   const [text, setText] = useState("");
   const end = useRef<HTMLDivElement>(null);
 
@@ -29,8 +34,13 @@ export default function Messages({ onCall }: { onCall: (audioOnly: boolean) => v
       text: text.trim(),
       time: "now",
     };
-    setThreads((t) => ({ ...t, [active.id]: [...(t[active.id] || []), msg] }));
+    setThreads((t) => ({
+      ...t,
+      [active.id]: [...(t[active.id] ?? activeMessages ?? []), msg],
+    }));
+    sendMessage.mutate({ conversationId: active.id, text: msg.text });
     setText("");
+    if (config.enableApi) return;
     setTimeout(() => {
       const reply: DirectMessage = {
         id: `r${Date.now()}`,
@@ -127,7 +137,7 @@ export default function Messages({ onCall }: { onCall: (audioOnly: boolean) => v
             </button>
           </div>
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
-            {(threads[active.id] || []).map((m) => (
+            {(threads[active.id] ?? activeMessages ?? []).map((m) => (
               <div key={m.id} className={cn("flex", m.fromMe ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(

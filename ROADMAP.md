@@ -73,6 +73,8 @@ Make the codebase production-grade before adding services.
 
 ### Phase 1 — Backend, auth & persistence _(~2–3 weeks)_
 
+> **🚧 IN PROGRESS — started 2026-08-20.** The typed REST/TanStack Query client and Fastify service now provide versioned SQL migrations, local SQLite persistence, seeded development data, bcrypt credentials, short-lived JWT access tokens, rotating refresh tokens, CORS, validation, and the streams/feed/follows/comments/conversations/DM endpoints consumed by the UI. Discover is always the landing page; Discover, Feed, stream watching, and `/u/:handle` creator profiles are public, while personal pages and write actions redirect guests to `/login` and return them afterward. Startup session restoration, single-flight token refresh/retry, expiration handling, and sign-out are connected behind `VITE_ENABLE_API`. Profile edits, follower previews, statistics, follows, comments, and DMs persist. The disabled flag keeps fixture mode fully offline. PostgreSQL/managed-SQL deployment, signed media uploads, OAuth, and the remaining fixture consumers are next.
+
 Replace `data.ts` with a real API; keep every type.
 
 - **Stack:** NestJS or Fastify + Prisma + PostgreSQL; Redis for cache/presence; S3-compatible storage (avatars/thumbnails/post media). Alternative low-ops path: **Supabase** (auth + Postgres + storage + realtime) to move faster.
@@ -85,6 +87,8 @@ Replace `data.ts` with a real API; keep every type.
 **Exit criteria:** fresh DB → sign up → post/comment/follow/DM persist across reloads; Discover/Feed render from API with identical UI.
 
 ### Phase 2 — Real live video _(~2–3 weeks)_
+
+> **🚧 IN PROGRESS — started 2026-08-22.** The pre-join lobby and call rooms acquire real camera, microphone, and display tracks behind `VITE_ENABLE_MEDIA`, with track-backed controls, Web Audio metering, browser stop-sharing handling, errors, retries, and cleanup. LiveKit transport is wired when `VITE_LIVEKIT_URL` and server credentials are configured: room-scoped JWTs allow anonymous subscribe-only viewers while enforcing authenticated stream ownership for publishers; local tracks publish and remote participants/tracks populate tiles. Go Live now creates a unique persisted stream before joining, keeps a clean shareable `/live/:id` URL, restores host mode across refreshes in the originating tab, and marks the stream as replay when its owner leaves. A configured LiveKit deployment, replay recording, and full multi-browser end-to-end validation are next.
 
 The core differentiator; replace simulated media behind the same components.
 
@@ -102,6 +106,8 @@ The core differentiator; replace simulated media behind the same components.
 **Exit criteria:** two browsers join `/live/:id` and see/hear each other; broadcast + group flows both work through the untouched UI.
 
 ### Phase 3 — Realtime social layer _(~2 weeks)_
+
+> **🚧 IN PROGRESS — started 2026-08-22.** Socket.IO runs on Fastify through Vite's WebSocket proxy behind `VITE_ENABLE_REALTIME`. Isolated stream channels provide database-backed chat history, synchronized guest/authenticated messages, reactions, membership presence, and join/leave system messages. The existing gift picker now emits shared animated gift events, writes a ledger-ready `gift_events` record against a seeded gift catalog, and shows every viewer the sender toast and system message. Per-socket chat rate limiting is active; realtime disables the old bots/random viewer timer while fixture behavior remains the fallback. Redis fan-out, wallet debits, notifications, typing, and incoming calls are next.
 
 Kill the remaining timers.
 

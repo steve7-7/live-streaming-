@@ -5,6 +5,11 @@ import { Icon } from "./Icons";
 import Avatar from "./Avatar";
 import FloatingReactions from "./FloatingReactions";
 import { cn } from "../utils/cn";
+import { config } from "../config";
+import { useAuth } from "../auth/AuthContext";
+import { useDisplayMedia, useLocalMedia, type MediaStatus } from "../hooks/useLocalMedia";
+import { useLiveKitRoom } from "../hooks/useLiveKitRoom";
+import { useRealtimeRoom } from "../hooks/useRealtimeRoom";
 
 interface Props {
   stream: Stream;
@@ -27,6 +32,32 @@ function createReaction(emoji: string): Reaction {
   return { id: `r${rid++}`, emoji, x: 5 + Math.random() * 80 };
 }
 
+function MediaVideo({
+  stream,
+  mirrored,
+  muted = true,
+}: {
+  stream: MediaStream;
+  mirrored?: boolean;
+  muted?: boolean;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = stream;
+  }, [stream]);
+  return (
+    // Live tracks do not expose a caption file; realtime transcription is planned in Phase 4.
+    // eslint-disable-next-line jsx-a11y/media-has-caption
+    <video
+      ref={ref}
+      autoPlay
+      muted={muted}
+      playsInline
+      className={cn("absolute inset-0 h-full w-full object-cover", mirrored && "-scale-x-100")}
+    />
+  );
+}
+
 function VideoTile({
   user,
   big,
@@ -35,6 +66,11 @@ function VideoTile({
   facing,
   pinnedId,
   handRaised,
+  isLocal = false,
+  localStream,
+  localMediaStatus = "idle",
+  screenSharing = false,
+  remoteStream,
 }: {
   user: User;
   big?: boolean;
@@ -43,9 +79,13 @@ function VideoTile({
   facing: "user" | "environment";
   pinnedId: string;
   handRaised: boolean;
+  isLocal?: boolean;
+  localStream?: MediaStream | null;
+  localMediaStatus?: MediaStatus;
+  screenSharing?: boolean;
+  remoteStream?: MediaStream;
 }) {
-  const isMe = user.id === "me";
-  const showCam = isMe ? camOn : true;
+  const showCam = isLocal ? camOn || screenSharing : true;
   return (
     <div
       className={cn(
@@ -54,22 +94,42 @@ function VideoTile({
       )}
     >
       {showCam ? (
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `radial-gradient(circle at 50% 40%, ${user.color}44, #0f172a 75%)`,
-            transform: isMe && facing === "environment" ? "scaleX(-1)" : undefined,
-          }}
-        >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <Avatar user={user} size={big ? "xl" : "lg"} ring />
-              {isMe && facing === "environment" && (
-                <span className="mt-2 block text-[10px] text-white/60">Rear camera</span>
+        remoteStream ? (
+          <MediaVideo stream={remoteStream} muted={false} />
+        ) : isLocal && config.enableMedia ? (
+          localStream ? (
+            <MediaVideo stream={localStream} mirrored={!screenSharing && facing === "user"} />
+          ) : (
+            <div className="flex flex-col items-center gap-3 text-slate-300">
+              {localMediaStatus === "requesting" ? (
+                <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-violet-400" />
+              ) : (
+                <Avatar user={user} size={big ? "xl" : "lg"} />
               )}
+              <span className="text-xs">
+                {localMediaStatus === "denied"
+                  ? "Camera permission required"
+                  : "Connecting camera…"}
+              </span>
+            </div>
+          )
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `radial-gradient(circle at 50% 40%, ${user.color}44, #0f172a 75%)`,
+            }}
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <Avatar user={user} size={big ? "xl" : "lg"} ring />
+                {isLocal && facing === "environment" && (
+                  <span className="mt-2 block text-[10px] text-white/60">Rear camera</span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )
       ) : (
         <div className="flex flex-col items-center gap-2 text-slate-400">
           <Avatar user={user} size={big ? "xl" : "lg"} />
@@ -77,7 +137,7 @@ function VideoTile({
         </div>
       )}
       <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-lg bg-black/50 px-2 py-1 backdrop-blur">
-        {isMe ? (
+        {isLocal ? (
           micOn ? (
             <Icon.Mic className="h-3 w-3 text-emerald-400" />
           ) : (
@@ -88,13 +148,23 @@ function VideoTile({
         )}
         <span className="text-xs font-medium text-white">{user.name}</span>
       </div>
+      {isLocal && screenSharing && (
+        <span className="absolute top-2 left-2 rounded-md bg-violet-500/90 px-2 py-1 text-[10px] font-semibold text-white">
+          Sharing screen
+        </span>
+      )}
       {user.id === pinnedId && (
         <div className="absolute top-2 right-2 rounded-md bg-violet-500/80 p-1">
           <Icon.Pin className="h-3 w-3 text-white" />
         </div>
       )}
-      {isMe && handRaised && (
-        <div className="absolute top-2 left-2 animate-bounce rounded-md bg-amber-400 p-1">
+      {isLocal && handRaised && (
+        <div
+          className={cn(
+            "absolute left-2 animate-bounce rounded-md bg-amber-400 p-1",
+            screenSharing ? "top-10" : "top-2"
+          )}
+        >
           <Icon.Hand className="h-3.5 w-3.5 text-white" />
         </div>
       )}
@@ -115,6 +185,8 @@ export default function CallRoom({
   toggleFacing,
   onInvite,
 }: Props) {
+  const { user } = useAuth();
+  const localUser = user ?? (mode === "watch" ? me : stream.host);
   const [messages, setMessages] = useState<ChatMessage[]>(initialChat);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [input, setInput] = useState("");
@@ -125,43 +197,92 @@ export default function CallRoom({
   const [layout, setLayout] = useState<"speaker" | "grid">(mode === "group" ? "grid" : "speaker");
   const [elapsed, setElapsed] = useState(0);
   const [viewers, setViewers] = useState(stream.viewers);
-  const [pinned, setPinned] = useState<User>(mode === "watch" ? stream.host : me);
+  const [pinned, setPinned] = useState<User>(mode === "watch" ? stream.host : localUser);
   const [likes, setLikes] = useState(0);
   const [showGifts, setShowGifts] = useState(false);
   const [giftToast, setGiftToast] = useState<string | null>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
+  const localMedia = useLocalMedia({
+    enabled: config.enableMedia && mode !== "watch",
+    camOn,
+    micOn,
+    facing,
+  });
+  const displayMedia = useDisplayMedia(config.enableMedia && screenShare && mode !== "watch", () =>
+    setScreenShare(false)
+  );
+  const activeLocalStream =
+    screenShare && displayMedia.stream ? displayMedia.stream : localMedia.stream;
+  const liveRoom = useLiveKitRoom({
+    roomId: stream.id,
+    role: mode === "watch" ? "watch" : "publish",
+    localStream: mode === "watch" ? null : activeLocalStream,
+    screenSharing: screenShare && Boolean(displayMedia.stream),
+  });
+  const realtime = useRealtimeRoom(stream.id);
+  const activeMessages = realtime.enabled ? realtime.messages : messages;
+  const activeReactions = realtime.enabled ? realtime.reactions : reactions;
+  const activeViewers = realtime.enabled ? realtime.viewers : viewers;
+  const activeGiftToast = realtime.enabled ? realtime.latestGift : giftToast;
 
   const spawnReaction = (emoji: string) => {
+    if (realtime.enabled) {
+      realtime.sendReaction(emoji);
+      return;
+    }
     const r = createReaction(emoji);
     setReactions((prev) => [...prev, r]);
     setTimeout(() => setReactions((prev) => prev.filter((x) => x.id !== r.id)), 3000);
   };
 
   const gifts = [
-    { e: "🌹", n: "Rose", c: 10 },
-    { e: "🎉", n: "Party", c: 50 },
-    { e: "💎", n: "Diamond", c: 100 },
-    { e: "👑", n: "Crown", c: 250 },
-    { e: "🚀", n: "Rocket", c: 500 },
-    { e: "🦄", n: "Unicorn", c: 1000 },
+    { id: "rose", e: "🌹", n: "Rose", c: 10 },
+    { id: "party", e: "🎉", n: "Party", c: 50 },
+    { id: "diamond", e: "💎", n: "Diamond", c: 100 },
+    { id: "crown", e: "👑", n: "Crown", c: 250 },
+    { id: "rocket", e: "🚀", n: "Rocket", c: 500 },
+    { id: "unicorn", e: "🦄", n: "Unicorn", c: 1000 },
   ];
 
-  const sendGift = (g: { e: string; n: string }) => {
+  const sendGift = (g: { id: string; e: string; n: string }) => {
     setShowGifts(false);
+    if (realtime.enabled) {
+      realtime.sendGift(g.id);
+      return;
+    }
     setGiftToast(`You sent a ${g.n} ${g.e}`);
     for (let i = 0; i < 5; i++) setTimeout(() => spawnReaction(g.e), i * 120);
     setMessages((m) => [
       ...m,
-      { id: `g${Date.now()}`, user: me, text: `sent a ${g.n} ${g.e}`, time: "now", system: true },
+      {
+        id: `g${Date.now()}`,
+        user: localUser,
+        text: `sent a ${g.n} ${g.e}`,
+        time: "now",
+        system: true,
+      },
     ]);
     setTimeout(() => setGiftToast(null), 2500);
   };
 
+  const connectedUsers: User[] = Object.values(liveRoom.remoteParticipants).map(
+    (participant, index) => ({
+      id: participant.id,
+      name: participant.name,
+      handle: `@${participant.id.slice(0, 12)}`,
+      avatar: "",
+      color: ["#06b6d4", "#ec4899", "#10b981", "#f59e0b"][index % 4],
+      status: "online",
+      followers: 0,
+    })
+  );
   const participants: User[] =
     mode === "group"
-      ? [me, users[0], users[1], users[3], users[6], users[7]]
+      ? liveRoom.enabled
+        ? [localUser, ...connectedUsers]
+        : [localUser, users[0], users[1], users[3], users[6], users[7]]
       : mode === "broadcast"
-        ? [me]
+        ? [localUser]
         : [stream.host];
 
   useEffect(() => {
@@ -170,6 +291,7 @@ export default function CallRoom({
   }, []);
 
   useEffect(() => {
+    if (realtime.enabled) return;
     const t = setInterval(() => {
       setViewers((v) => Math.max(1, v + Math.floor(Math.random() * 21) - 8));
       if (Math.random() > 0.35) {
@@ -177,21 +299,31 @@ export default function CallRoom({
         const text = chatBots[Math.floor(Math.random() * chatBots.length)];
         setMessages((m) => [...m.slice(-40), { id: `b${Date.now()}`, user: u, text, time: "now" }]);
       }
-      if (Math.random() > 0.5) spawnReaction(emojis[Math.floor(Math.random() * emojis.length)]);
+      if (Math.random() > 0.5) {
+        const reaction = createReaction(emojis[Math.floor(Math.random() * emojis.length)]);
+        setReactions((current) => [...current, reaction]);
+        setTimeout(
+          () => setReactions((current) => current.filter((item) => item.id !== reaction.id)),
+          3000
+        );
+      }
     }, 2600);
     return () => clearInterval(t);
-  }, []);
+  }, [realtime.enabled]);
 
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [activeMessages]);
 
   const send = () => {
     if (!input.trim()) return;
-    setMessages((m) => [
-      ...m,
-      { id: `me${Date.now()}`, user: me, text: input.trim(), time: "now" },
-    ]);
+    if (realtime.enabled) realtime.sendMessage(input.trim());
+    else {
+      setMessages((current) => [
+        ...current,
+        { id: `me${Date.now()}`, user: localUser, text: input.trim(), time: "now" },
+      ]);
+    }
     setInput("");
   };
 
@@ -215,6 +347,11 @@ export default function CallRoom({
                 facing={facing}
                 pinnedId={pinned.id}
                 handRaised={handRaised}
+                isLocal={mode !== "watch" && pinned.id === localUser.id}
+                localStream={activeLocalStream}
+                localMediaStatus={localMedia.status}
+                screenSharing={screenShare && Boolean(displayMedia.stream)}
+                remoteStream={liveRoom.remoteStreams[pinned.id]}
               />
               {participants.length > 1 && (
                 <div className="absolute bottom-4 right-4 flex gap-2">
@@ -234,22 +371,14 @@ export default function CallRoom({
                           facing={facing}
                           pinnedId={pinned.id}
                           handRaised={handRaised}
+                          isLocal={mode !== "watch" && p.id === localUser.id}
+                          localStream={activeLocalStream}
+                          localMediaStatus={localMedia.status}
+                          screenSharing={screenShare && Boolean(displayMedia.stream)}
+                          remoteStream={liveRoom.remoteStreams[p.id]}
                         />
                       </button>
                     ))}
-                </div>
-              )}
-              {mode === "broadcast" && camOn && (
-                <div className="absolute top-4 right-4 w-24 sm:w-32 opacity-90">
-                  <div className="relative overflow-hidden rounded-xl border-2 border-white/20 aspect-video bg-slate-800">
-                    <div
-                      className="absolute inset-0"
-                      style={{ background: `radial-gradient(circle, ${me.color}55, #0f172a)` }}
-                    />
-                    <span className="absolute bottom-1 left-1 text-[9px] text-white/80">
-                      Preview
-                    </span>
-                  </div>
                 </div>
               )}
             </div>
@@ -264,12 +393,17 @@ export default function CallRoom({
                     facing={facing}
                     pinnedId={pinned.id}
                     handRaised={handRaised}
+                    isLocal={mode !== "watch" && p.id === localUser.id}
+                    localStream={activeLocalStream}
+                    localMediaStatus={localMedia.status}
+                    screenSharing={screenShare && Boolean(displayMedia.stream)}
+                    remoteStream={liveRoom.remoteStreams[p.id]}
                   />
                 </button>
               ))}
             </div>
           )}
-          <FloatingReactions reactions={reactions} />
+          <FloatingReactions reactions={activeReactions} />
         </div>
 
         {/* Top bar */}
@@ -284,8 +418,36 @@ export default function CallRoom({
               {fmt(elapsed)}
             </span>
             <span className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
-              <Icon.User className="h-3 w-3" /> {viewers.toLocaleString()}
+              <Icon.User className="h-3 w-3" /> {activeViewers.toLocaleString()}
             </span>
+            {realtime.enabled && (
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[10px] font-semibold backdrop-blur",
+                  realtime.connected ? "bg-violet-500/80 text-white" : "bg-red-500/80 text-white"
+                )}
+              >
+                {realtime.connected ? "Chat live" : "Chat offline"}
+              </span>
+            )}
+            {liveRoom.enabled && (
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[10px] font-semibold backdrop-blur",
+                  liveRoom.status === "connected"
+                    ? "bg-emerald-500/80 text-white"
+                    : liveRoom.status === "error"
+                      ? "bg-red-500/80 text-white"
+                      : "bg-black/50 text-slate-200"
+                )}
+              >
+                {liveRoom.status === "connected"
+                  ? "Media connected"
+                  : liveRoom.status === "error"
+                    ? "Media offline"
+                    : "Connecting media…"}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -322,7 +484,7 @@ export default function CallRoom({
         {/* Stream title */}
         <div className="absolute bottom-24 left-3 right-3 sm:bottom-28 sm:left-4 pointer-events-none">
           <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 backdrop-blur">
-            <Avatar user={mode === "watch" ? stream.host : me} size="xs" />
+            <Avatar user={mode === "watch" ? stream.host : localUser} size="xs" />
             <span className="truncate text-sm font-medium text-white">{stream.title}</span>
           </div>
         </div>
@@ -358,10 +520,11 @@ export default function CallRoom({
               <Icon.Switch className="h-5 w-5" />
             </button>
             <button
-              onClick={() => setScreenShare((s) => !s)}
+              onClick={() => mode !== "watch" && setScreenShare((s) => !s)}
               aria-label="Toggle screen share"
               className={cn(
-                "rounded-xl p-3 text-white transition hidden sm:block",
+                "rounded-xl p-3 text-white transition",
+                mode === "watch" ? "hidden" : "hidden sm:block",
                 screenShare ? "bg-violet-500 hover:bg-violet-600" : "bg-white/10 hover:bg-white/20"
               )}
             >
@@ -467,10 +630,16 @@ export default function CallRoom({
           </div>
         )}
 
+        {(displayMedia.error || liveRoom.error || realtime.error) && (
+          <div className="absolute left-1/2 top-20 z-20 max-w-sm -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2 text-center text-xs text-slate-200 shadow-xl">
+            {displayMedia.error || liveRoom.error || realtime.error}
+          </div>
+        )}
+
         {/* Gift toast */}
-        {giftToast && (
+        {activeGiftToast && (
           <div className="absolute left-1/2 top-20 z-20 -translate-x-1/2 animate-[slideUp_.3s_ease] rounded-full bg-gradient-to-r from-fuchsia-500 to-amber-400 px-5 py-2 text-sm font-semibold text-white shadow-xl">
-            {giftToast}
+            {activeGiftToast}
           </div>
         )}
 
@@ -500,10 +669,10 @@ export default function CallRoom({
           <h3 className="flex items-center gap-2 font-semibold text-white">
             <Icon.Chat className="h-4 w-4" /> Live Chat
           </h3>
-          <span className="text-xs text-slate-400">{viewers.toLocaleString()} watching</span>
+          <span className="text-xs text-slate-400">{activeViewers.toLocaleString()} watching</span>
         </div>
         <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
-          {messages.map((m) =>
+          {activeMessages.map((m) =>
             m.system ? (
               <div
                 key={m.id}
