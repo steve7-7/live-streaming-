@@ -8,6 +8,8 @@ export const config = {
   apiTimeoutMs: Number(env("VITE_API_TIMEOUT_MS", "10000")),
   /** Use the Phase 1 REST data layer instead of seeded demo fixtures. */
   enableApi: env("VITE_ENABLE_API") === "true",
+  /** Enable real browser camera/microphone tracks for Phase 2 media flows. */
+  enableMedia: env("VITE_ENABLE_MEDIA") === "true",
   /** Realtime gateway URL — wired in Phase 3 (WebSocket). */
   wsUrl: env("VITE_WS_URL", "ws://localhost:4000"),
   /** LiveKit SFU URL — wired in Phase 2 (real media). */

@@ -88,6 +88,8 @@ Replace `data.ts` with a real API; keep every type.
 
 ### Phase 2 — Real live video _(~2–3 weeks)_
 
+> **🚧 IN PROGRESS — started 2026-08-22.** The pre-join lobby now acquires real camera and microphone tracks behind `VITE_ENABLE_MEDIA`, renders a mirrored live preview, applies mic/camera toggles to tracks, reacquires the preferred front/rear camera, measures the real microphone level with Web Audio, stops every track on cleanup, and provides requesting, unsupported, denied, retry, and device-error states. The fixture preview remains available when the flag is disabled. LiveKit room tokens, publishing, and remote subscription are next.
+
 The core differentiator; replace simulated media behind the same components.
 
 - **SFU:** LiveKit (open-source, cloud or self-hosted) — recommended. Alternatives: Agora, Daily, 100ms.

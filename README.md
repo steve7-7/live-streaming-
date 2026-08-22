@@ -2,7 +2,7 @@
 
 A live-streaming social app prototype: discover streams, watch/broadcast/group video rooms with chat & gifts, a photo/reels feed, stories, DMs, and notifications — all in React 19 + Vite + Tailwind CSS 4.
 
-> **Status:** Phase 0 is complete and Phase 1 is in progress — see [ROADMAP.md](./ROADMAP.md). Discover, Feed, streams, and creator profiles are public; authentication is requested only for personal pages and social actions. Fastify persistence, JWT authentication, automatic token rotation, and the typed REST/TanStack Query client are available behind `VITE_ENABLE_API`; fixture mode remains available for offline use.
+> **Status:** Phase 0 is complete, Phase 1 persistence is functional, and Phase 2 media work has started — see [ROADMAP.md](./ROADMAP.md). Public browsing and authenticated social actions use the Fastify/TanStack Query stack. The pre-join lobby uses real camera, microphone, and audio-level tracks behind `VITE_ENABLE_MEDIA`; fixture mode remains available for offline use.
 
 ## Quickstart
 
@@ -50,7 +50,7 @@ Deep links are refresh-safe; leaving a room returns to the previous tab.
 
 ## Environment
 
-Copy `.env.example` → `.env`. Server values configure the SQLite database, API port, CORS origin, and separate access/refresh JWT secrets. Client values are read through `src/config.ts`. Fixture mode is the default; set `VITE_ENABLE_API=true` to activate the Phase 1 REST client. `VITE_API_URL=/api` uses Vite's proxy, so browser code never calls localhost directly. It currently consumes:
+Copy `.env.example` → `.env`. Server values configure the SQLite database, API port, CORS origin, and separate access/refresh JWT secrets. Client values are read through `src/config.ts`. Set `VITE_ENABLE_API=true` for persistence and `VITE_ENABLE_MEDIA=true` for the real pre-join camera/microphone check. `VITE_API_URL=/api` uses Vite's proxy, so browser code never calls localhost directly. The client currently consumes:
 
 - `POST /auth/register`, `/auth/login`, `/auth/refresh`, and `/auth/logout`
 - `GET /health`, `/me`, `/me/stats`, `/me/followers`, `/users/:handle`, `/streams`, `/streams/:id`, `/feed`, `/conversations`, and `/conversations/:id/messages`
