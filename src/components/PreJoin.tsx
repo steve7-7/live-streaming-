@@ -16,7 +16,7 @@ interface Props {
   setMicOn: (v: boolean) => void;
   toggleFacing: () => void;
   onCancel: () => void;
-  onStart: (title: string, category: string) => void;
+  onStart: (title: string, category: string) => void | Promise<void>;
 }
 
 const categories = ["Gaming", "Music", "Food", "Tech", "Art", "Fitness", "Talk"];
@@ -37,6 +37,8 @@ export default function PreJoin({
   const [title, setTitle] = useState(mode === "group" ? "Group Hangout" : "My Live Stream");
   const [category, setCategory] = useState("Talk");
   const [demoLevel, setDemoLevel] = useState(6);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const { stream, status, error, retry } = useLocalMedia({
     enabled: config.enableMedia,
@@ -57,6 +59,19 @@ export default function PreJoin({
     const timer = setInterval(() => setDemoLevel(2 + Math.floor(Math.random() * 16)), 180);
     return () => clearInterval(timer);
   }, [micOn]);
+
+  const start = async () => {
+    setStarting(true);
+    setStartError("");
+    try {
+      await onStart(title || "Live Stream", category);
+    } catch (cause) {
+      setStartError(
+        cause instanceof Error ? cause.message : "The live stream could not be created."
+      );
+      setStarting(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-slate-950 p-4 text-white">
@@ -220,17 +235,24 @@ export default function PreJoin({
           </div>
         </div>
 
+        {startError && (
+          <p role="alert" className="mt-5 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {startError}
+          </p>
+        )}
         <button
-          onClick={() => onStart(title || "Live Stream", category)}
-          disabled={config.enableMedia && status !== "ready"}
+          onClick={() => void start()}
+          disabled={starting || (config.enableMedia && status !== "ready")}
           className="mt-6 mb-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-500 to-fuchsia-500 py-3.5 font-bold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Icon.Record className="h-5 w-5" />{" "}
-          {config.enableMedia && status !== "ready"
-            ? "Waiting for devices…"
-            : mode === "group"
-              ? "Start Group Call"
-              : "Go Live Now"}
+          {starting
+            ? "Creating stream…"
+            : config.enableMedia && status !== "ready"
+              ? "Waiting for devices…"
+              : mode === "group"
+                ? "Start Group Call"
+                : "Go Live Now"}
         </button>
       </div>
     </div>

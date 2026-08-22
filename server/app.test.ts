@@ -111,6 +111,27 @@ describe("Streamly API", () => {
     expect(reused.statusCode).toBe(401);
   });
 
+  it("creates a unique broadcast and marks it ended for its owner", async () => {
+    const headers = { authorization: `Bearer ${accessToken}` };
+    const created = await app.inject({
+      method: "POST",
+      url: "/streams",
+      headers,
+      payload: { title: "Integration Broadcast", category: "Tech" },
+    });
+    expect(created.statusCode).toBe(201);
+    const stream = created.json<{ id: string; live: boolean; title: string }>();
+    expect(stream).toMatchObject({ live: true, title: "Integration Broadcast" });
+
+    const ended = await app.inject({
+      method: "PATCH",
+      url: `/streams/${stream.id}/end`,
+      headers,
+    });
+    expect(ended.statusCode).toBe(200);
+    expect(ended.json<{ live: boolean }>().live).toBe(false);
+  });
+
   it("persists profile edits for a registered user", async () => {
     const unique = randomUUID().slice(0, 8);
     const registration = await app.inject({

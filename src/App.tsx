@@ -26,8 +26,10 @@ import PreJoin from "./components/PreJoin";
 import NotificationsPanel from "./components/NotificationsPanel";
 import { track } from "./lib/analytics";
 import { cn } from "./utils/cn";
-import { useStream } from "./hooks/useData";
+import { queryKeys, useStream } from "./hooks/useData";
 import { useAuth } from "./auth/AuthContext";
+import { api } from "./lib/api";
+import { queryClient } from "./lib/queryClient";
 import AuthScreen from "./auth/AuthScreen";
 import { config } from "./config";
 
@@ -40,9 +42,14 @@ const TAB_ROUTES: Record<Tab, string> = {
   profile: "/profile",
 };
 
-function makeCallStream(host: typeof me, title = "Group Call", category = "Call"): Stream {
+function makeCallStream(
+  host: typeof me,
+  title = "Group Call",
+  category = "Call",
+  id = "group"
+): Stream {
   return {
-    id: "group",
+    id,
     title,
     host,
     category,
@@ -97,11 +104,22 @@ export default function App() {
     setLobby({ mode });
   };
 
-  const launchFromLobby = (title: string, category: string) => {
+  const launchFromLobby = async (title: string, category: string) => {
     if (!lobby) return;
     const mode = lobby.mode;
-    setLobby(null);
     track("stream_start", { mode, category });
+
+    if (mode === "broadcast" && config.enableApi) {
+      const created = await api.createStream(title, category);
+      sessionStorage.setItem(`streamly_host_stream:${created.id}`, "broadcast");
+      queryClient.setQueryData(queryKeys.stream(created.id), created);
+      void queryClient.invalidateQueries({ queryKey: ["streams"] });
+      setLobby(null);
+      navigate(`/live/${created.id}`);
+      return;
+    }
+
+    setLobby(null);
     navigate(
       mode === "broadcast"
         ? `/live/broadcast?title=${encodeURIComponent(title)}&category=${encodeURIComponent(category)}`
@@ -381,16 +399,18 @@ function LiveCall({
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const isLocalRoom = id === "broadcast" || id === "group";
+  const hostedMode = id ? sessionStorage.getItem(`streamly_host_stream:${id}`) : null;
   const { data: remoteStream, isPending, isError } = useStream(isLocalRoom ? undefined : id);
 
-  let mode: "watch" | "broadcast" | "group" = "watch";
+  let mode: "watch" | "broadcast" | "group" = hostedMode === "broadcast" ? "broadcast" : "watch";
   let stream: Stream | null = null;
   if (id === "broadcast") {
     mode = "broadcast";
     stream = makeCallStream(
       currentUser,
       searchParams.get("title") || "Your Broadcast",
-      searchParams.get("category") || "Call"
+      searchParams.get("category") || "Call",
+      "broadcast"
     );
   } else if (id === "group") {
     mode = "group";
@@ -408,7 +428,15 @@ function LiveCall({
     <CallRoom
       stream={stream}
       mode={mode}
-      onLeave={onLeave}
+      onLeave={() => {
+        if (mode === "broadcast" && config.enableApi && id && id !== "broadcast") {
+          sessionStorage.removeItem(`streamly_host_stream:${id}`);
+          void api
+            .endStream(id)
+            .finally(() => queryClient.invalidateQueries({ queryKey: ["streams"] }));
+        }
+        onLeave();
+      }}
       onOpenSettings={onOpenSettings}
       onInvite={onInvite}
       camOn={camOn}

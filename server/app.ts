@@ -303,6 +303,37 @@ export async function buildApp() {
     return stream ? streamFromRow(stream) : reply.code(404).send({ message: "Stream not found" });
   });
 
+  app.post("/streams", { preHandler: requireUser }, (request, reply) => {
+    const input = z
+      .object({
+        title: z.string().trim().min(1).max(140),
+        category: z.string().trim().min(1).max(50),
+      })
+      .parse(request.body);
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO streams
+      (id, title, category, thumbnail, viewers, status, tags, host_id)
+      VALUES (?, ?, ?, ?, 0, 'live', '[]', ?)`
+    ).run(
+      id,
+      input.title,
+      input.category,
+      `https://picsum.photos/seed/${id}/600/400`,
+      (request.user as AuthPayload).sub
+    );
+    return reply.code(201).send(streamFromRow(row(`${streamSql} WHERE s.id = ?`, id)!));
+  });
+
+  app.patch("/streams/:id/end", { preHandler: requireUser }, (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const result = db
+      .prepare("UPDATE streams SET status = 'vod' WHERE id = ? AND host_id = ?")
+      .run(id, (request.user as AuthPayload).sub);
+    if (!result.changes) return reply.code(404).send({ message: "Stream not found" });
+    return streamFromRow(row(`${streamSql} WHERE s.id = ?`, id)!);
+  });
+
   app.get("/users/:handle", async (request, reply) => {
     const { handle } = z.object({ handle: z.string().min(1) }).parse(request.params);
     const normalizedHandle = `@${handle.replace(/^@/, "").toLowerCase()}`;

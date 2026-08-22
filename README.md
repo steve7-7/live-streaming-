@@ -55,6 +55,7 @@ Copy `.env.example` → `.env`. Server values configure SQLite, CORS, auth secre
 - `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, and `/live/token`
 - `GET /health`, `/me`, `/me/stats`, `/me/followers`, `/users/:handle`, `/streams`, `/streams/:id`, `/feed`, `/conversations`, and `/conversations/:id/messages`
 - `PATCH /me` for persisted name, handle, and avatar URL edits
+- `POST /streams` creates a unique live broadcast; `PATCH /streams/:id/end` marks it replayable
 - `POST /posts/:id/comments`, `/posts/:id/like`, `/follows/:userId`, and `/conversations/:id/messages`
 - `DELETE /posts/:id/like` and `/follows/:userId`
 

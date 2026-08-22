@@ -136,6 +136,10 @@ export const api = {
   streams: (filters: { category?: string; q?: string } = {}) =>
     request<Stream[]>(`/streams${params(filters)}`),
   stream: (id: string) => request<Stream>(`/streams/${encodeURIComponent(id)}`),
+  createStream: (title: string, category: string) =>
+    request<Stream>("/streams", { method: "POST", body: { title, category } }),
+  endStream: (id: string) =>
+    request<Stream>(`/streams/${encodeURIComponent(id)}/end`, { method: "PATCH" }),
   feed: () => request<FeedPost[]>("/feed"),
   conversations: () => request<Conversation[]>("/conversations"),
   messages: (conversationId: string) =>
